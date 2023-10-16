@@ -11,8 +11,10 @@ your results should be reproducable and therefore well documented!!!
 - [Directory Structure](#directory-structure)
 - [Getting Started](#getting-started)
 - [Contributing](#contributing)
+- [Version Control](#version-control)
 - [Code Style](#code-style)
 - [Communication](#communication)
+- [Disclaimer](#disclaimer)
 
 ## Project Overview
 
