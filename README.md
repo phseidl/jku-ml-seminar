@@ -39,6 +39,8 @@ Within the projects a suggestion would be:
 -- 
 please all try to mentain a README for both projects
 
+each project should have a `setup.py` and a `env.yml`, I will provide a base, which you can modify.
+
 ## Getting Started
 
 To get started with this project, follow these steps:
