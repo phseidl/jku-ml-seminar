@@ -55,11 +55,18 @@ Papers will be in a folder within the two groups in ````.*/data/papers/``, you c
 
 ## Contributing
 
-TODO
+Each group is responsible for their own codebase and should follow their established contribution guidelines within their respective subdirectories.
+Collaboration between groups is encouraged, and any cross-group collaboration should be discussed and documented.
+Code Style
+It's essential to maintain consistent coding and documentation standards within each group's codebase. Refer to the specific code style guidelines provided in your group's subdirectory.
+
+## Version Control
+
+We use Git for version control. Make sure to follow Git best practices, create branches for feature development or bug fixes, and use descriptive commit messages.
 
 ## Code Style
 
-I'll let you figure this out ;)
+It's essential to maintain consistent coding and documentation standards within each group's codebase. Refer to the specific code style guidelines provided in your group's subdirectory.
 
 ## Communication
 
