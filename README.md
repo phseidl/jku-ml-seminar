@@ -1,6 +1,6 @@
 # Seminar and Master's Thesis Repository
 
-Meeting: every Monday 14-15:00 SP13 S318
+Meeting: every Monday 14-15:00 SP13 S318 (first ~30min for DD; rest for EEG) 
 
 
 This is the official repository for the seminar and master's thesis project, which encompasses two distinct groups: drug-discovery and EEG (Electroencephalography) research. This mono-repository is designed to facilitate coordination, version control, and collaboration between you all.
