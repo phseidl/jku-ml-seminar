@@ -2,7 +2,7 @@
 -- add your name if you pick it ;) e.g. 
 
 - Philipp Seidl [Time Series as Images: Vision Transformer for Irregularly Sampled Time Series](https://openreview.net/forum?id=Nv0tzncECS)
-- Markus Gutenberger [Deep-EEG: An Optimized and Robust Framework and Method for EEG-Based Diagnosis of Epileptic Seizure](https://www.mdpi.com/2075-4418/13/4/773)
+- Markus Gutenberger [CLEEGN: A Convolutional Neural Network for Plug-and-Play Automatic EEG Reconstruction](https://openreview.net/forum?id=O3NQgGoGu6)
 - Liza Shchasnovich [BIOT: Cross-data Biosignal Learning in the Wild](https://arxiv.org/abs/2305.10351)
 
 
