@@ -5,6 +5,12 @@
 - Stefan Hangler [COATI: multi-modal contrastive pre-training for representing and traversing chemical space](https://chemrxiv.org/engage/chemrxiv/article-details/64e8137fdd1a73847f73f7aa)
 
 ## Papers
+
+[Submitted on 19 Oct 2023]
+MolCA: Molecular Graph-Language Modeling with Cross-Modal Projector and Uni-Modal Adapter
+Zhiyuan Liu, Sihang Li, Yanchen Luo, Hao Fei, Yixin Cao, Kenji Kawaguchi, Xiang Wang, Tat-Seng Chua
+Language Models (LMs) have demonstrated impressive molecule understanding ability on various 1D text-related tasks. However, they inherently lack 2D graph perception - a critical ability of human professionals in comprehending molecules' topological structures. To bridge this gap, we propose MolCA: Molecular Graph-Language Modeling with Cross-Modal Projector and Uni-Modal Adapter. MolCA enables an LM (e.g., Galactica) to understand both text- and graph-based molecular contents via the cross-modal projector. Specifically, the cross-modal projector is implemented as a Q-Former to connect a graph encoder's representation space and an LM's text space. Further, MolCA employs a uni-modal adapter (i.e., LoRA) for the LM's efficient adaptation to downstream tasks. Unlike previous studies that couple an LM with a graph encoder via cross-modal contrastive learning, MolCA retains the LM's ability of open-ended text generation and augments it with 2D graph information. To showcase its effectiveness, we extensively benchmark MolCA on tasks of molecule captioning, IUPAC name prediction, and molecule-text retrieval, on which MolCA significantly outperforms the baselines. Our codes and checkpoints can be found at this https URL. https://github.com/acharkq/MolCA
+
 [Submitted on 28 Sep 2023]
 Language models in molecular discovery
 Nikita Janakarajan, Tim Erdmann, Sarath Swaminathan, Teodoro Laino, Jannis Born
