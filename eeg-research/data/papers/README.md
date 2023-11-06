@@ -8,6 +8,11 @@
 
 ## Papers
 
+Neural decoding of music from the EEG
+Abstract
+Neural decoding models can be used to decode neural representations of visual, acoustic, or semantic information. Recent studies have demonstrated neural decoders that are able to decode accoustic information from a variety of neural signal types including electrocortiography (ECoG) and the electroencephalogram (EEG). In this study we explore how functional magnetic resonance imaging (fMRI) can be combined with EEG to develop an accoustic decoder. Specifically, we first used a joint EEG-fMRI paradigm to record brain activity while participants listened to music. We then used fMRI-informed EEG source localisation and a bi-directional long-term short term deep learning network to first extract neural information from the EEG related to music listening and then to decode and reconstruct the individual pieces of music an individual was listening to. We further validated our decoding model by evaluating its performance on a separate dataset of EEG-only recordings. We were able to reconstruct music, via our fMRI-informed EEG source analysis approach, with a mean rank accuracy of 71.8%. Using only EEG data, without participant specific fMRI-informed source analysis, we were able to identify the music a participant was listening to with a mean rank accuracy of 59.2%. This demonstrates that our decoding model may use fMRI-informed source analysis to aid EEG based decoding and reconstruction of acoustic information from brain activity and makes a step towards building EEG-based neural decoders for other complex information domains such as other acoustic, visual, or semantic information.
+https://www.nature.com/articles/s41598-022-27361-x#data-availability
+
 Epilepsy Detection by Using Scalogram Based Convolutional Neural Network from EEG Signals
 Ömer Türk1,* and Mehmet Siraç Özerdem2
 Author information Article notes Copyright and License information PMC Disclaimer
