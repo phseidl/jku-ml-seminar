@@ -1,12 +1,18 @@
 # Some links for papers
 -- add your name if you pick it ;) e.g. 
 
-- Philipp Seidl [Time Series as Images: Vision Transformer for Irregularly Sampled Time Series](https://openreview.net/forum?id=Nv0tzncECS)
 - Markus Gutenberger [CLEEGN: A Convolutional Neural Network for Plug-and-Play Automatic EEG Reconstruction](https://openreview.net/forum?id=O3NQgGoGu6)
 - Liza Shchasnovich [BIOT: Cross-data Biosignal Learning in the Wild](https://arxiv.org/abs/2305.10351)
 
 
 ## Papers
+
+[Submitted on 3 Jan 2023]
+Unsupervised Multivariate Time-Series Transformers for Seizure Identification on EEG
+İlkay Yıldız Potter, George Zerveas, Carsten Eickhoff, Dominique Duncan
+Epilepsy is one of the most common neurological disorders, typically observed via seizure episodes. Epileptic seizures are commonly monitored through electroencephalogram (EEG) recordings due to their routine and low expense collection. The stochastic nature of EEG makes seizure identification via manual inspections performed by highly-trained experts a tedious endeavor, motivating the use of automated identification. The literature on automated identification focuses mostly on supervised learning methods requiring expert labels of EEG segments that contain seizures, which are difficult to obtain. Motivated by these observations, we pose seizure identification as an unsupervised anomaly detection problem. To this end, we employ the first unsupervised transformer-based model for seizure identification on raw EEG. We train an autoencoder involving a transformer encoder via an unsupervised loss function, incorporating a novel masking strategy uniquely designed for multivariate time-series data such as EEG. Training employs EEG recordings that do not contain any seizures, while seizures are identified with respect to reconstruction errors at inference time. We evaluate our method on three publicly available benchmark EEG datasets for distinguishing seizure vs. non-seizure windows. Our method leads to significantly better seizure identification performance than supervised learning counterparts, by up to 16% recall, 9% accuracy, and 9% Area under the Receiver Operating Characteristics Curve (AUC), establishing particular benefits on highly imbalanced data. Through accurate seizure identification, our method could facilitate widely accessible and early detection of epilepsy development, without needing expensive label collection or manual feature extraction.
+https://arxiv.org/abs/2301.03470
+https://github.com/ilkyyldz95/EEG_MVTS
 
 Neural decoding of music from the EEG
 Abstract
