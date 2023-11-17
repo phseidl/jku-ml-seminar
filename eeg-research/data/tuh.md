@@ -5,6 +5,15 @@
 ## Get access to the dataset
 To request access to the TUH EEG Corpus, please fill out [this form](https://isip.piconepress.com/projects/tuh_eeg/html/data_sharing.pdf), follow the instructions given, and email a signed copy to help@nedcdata.org. Please include "Download The TUH EEG Corpus" in the subject line.
 
+In order to prevent issues with the "Your Personal Post Office Address At The Above Institution" field of the form, this is an address that works:
+
+\~Your Name~ \
+Johannes Kepler University \
+Institute for Machine Learning \
+Altenbergerstraße 69 \
+4040 Linz \
+Austria
+
 ## Downalod the data
 ### For the TUSZ - TUH EEG Seizure Corpus, using rsync:
 ```
