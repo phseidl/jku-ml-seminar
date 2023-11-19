@@ -3,7 +3,7 @@
 
 - Markus Gutenberger [CLEEGN: A Convolutional Neural Network for Plug-and-Play Automatic EEG Reconstruction](https://openreview.net/forum?id=O3NQgGoGu6)
 - Liza Shchasnovich [BIOT: Cross-data Biosignal Learning in the Wild](https://arxiv.org/abs/2305.10351)
-
+- Jozsef Kovacs [Ambulatory seizure forecasting with a wrist-worn device using long-short term memory deep learning](https://www.nature.com/articles/s41598-021-01449-2)
 
 ## Papers
 
