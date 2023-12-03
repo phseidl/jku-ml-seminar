@@ -1,0 +1,10 @@
+{
+    "batch-size": 32,
+    "epochs": 1,
+    "shuffle": true,
+    "save-path": null,
+    "window-size": 4,
+    "stride": 2,
+    "duration-unit": "sec",
+    "model_name": "bc-56chan"
+}

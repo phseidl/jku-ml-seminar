@@ -1,0 +1,12 @@
+{
+	"x_basepath": "data/TUH_TUSZ/TUH_dataset_PROCESSED/original",
+	"y_basepath": "data/TUH_TUSZ/TUH_dataset_PROCESSED/ICA",
+	"x_fpath": "Data_S{}.set",
+	"y_fpath": "Data_S{}_ICA.set",
+	"sfreq": 250.0,
+	"n_chan": null,
+	"subjects": [["003"], ["004"], ["005"], ["006"], ["007"], ["008"], ["009"], ["010"]],
+	"ch_names": null,
+	"tmin": 0,
+	"tmax": 600
+}
