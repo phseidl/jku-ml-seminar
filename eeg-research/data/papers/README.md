@@ -232,3 +232,10 @@ Reconstructing images using brain signals of imagined visuals may provide an aug
 
 From <https://ieeexplore.ieee.org/abstract/document/10096587?casa_token=U5wmKskCB50AAAAA:-UfjCyuPQYmlc5bxeaDU7wtYQjb0pnXdJQUlStJk5z6aq2s8Knk9ChJsTFqWNfGwuHIcpGnhXOCRLA> 
 
+
+[Submitted on 2 August 2023]
+SeizFt: Interpretable Machine Learning for Seizure Detection Using Wearables
+Irfan Al-Hussaini and Cassie S. Mitchell
+	This work presents SeizFt—a novel seizure detection framework that utilizes machine learning to automatically detect seizures using wearable SensorDot EEG data. Inspired by interpretable sleep staging, our novel approach employs a unique combination of data augmentation, meaningful feature extraction, and an ensemble of decision trees to improve resilience to variations in EEG and to increase the capacity to generalize to unseen data. Fourier Transform (FT) Surrogates were utilized to increase sample size and improve the class balance between labeled non-seizure and seizure epochs. To enhance model stability and accuracy, SeizFt utilizes an ensemble of decision trees through the CatBoost classifier to classify each second of EEG recording as seizure or non-seizure. Notably, SeizFt placed first among an array of state-of-the-art seizure detection algorithms as part of the Seizure Detection Grand Challenge at the 2023 International Conference on Acoustics, Speech, and Signal Processing (ICASSP). SeizFt outperformed state-of-the-art black-box models in accurate seizure detection and minimized false alarms, obtaining a total score of 40.15, combining OVLP and EPOCH across two tasks and representing an improvement of ~30% from the next best approach. The interpretability of SeizFt is a key advantage, as it fosters trust and accountability among healthcare professionals. In conclusion, the successful application of SeizFt to wearable SensorDot data suggests its potential for real-time, continuous monitoring to improve personalized medicine for epilepsy.
+
+From: <https://doi.org/10.3390/bioengineering10080918>
