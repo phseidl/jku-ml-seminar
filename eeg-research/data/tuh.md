@@ -17,7 +17,7 @@ Austria
 ## Downalod the data
 ### For the TUSZ - TUH EEG Seizure Corpus, using rsync:
 ```
-rsync -auxvL --delete nedc-eeg@www.isip.piconepress.com:data/eeg/tuh_eeg_seizure/v2.0.0/ ./data/datasets/TUSZ/
+rsync -auxvL --delete nedc-eeg@www.isip.piconepress.com:data/eeg/tuh_eeg_seizure/v2.0.1/ ./data/datasets/TUSZ/
 ```
 ### For the TUEV - TUH EEG Events Corpus:
 EEG segments as one of six classes: (1) spike and sharp wave (SPSW), (2) generalized periodic epileptiform discharges (GPED), (3) periodic lateralized epileptiform discharges (PLED), (4) eye movement (EYEM), (5) artifact (ARTF) and (6) background (BCKG).
