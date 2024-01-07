@@ -12,5 +12,5 @@ model.load_state_dict(weights["state_dict"])
 
 *Attention:* 
 - Only trained on a small part of TUSZ dataset (10 patients, 10min each)
-- Yet **no normalization** used for training (tbd)
+- Yet **no normalization** except from CAR re-referencing used for training (tbd)
 - Seizure periods are EXcluded from training process
