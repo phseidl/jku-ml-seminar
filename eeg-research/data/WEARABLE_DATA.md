@@ -1,8 +1,8 @@
-# Dataset availability for seizure forecasting and detection from non-EEG signals, using wearable devices
+# Dataset availability for seizure detection and forecasting from non-EEG signals, using wearable devices
 
 *Author: Jozsef Kovacs*  
 *Created: Nov 13th, 2023*  
-*Modified: Feb 12th, 2024*
+*Modified: Mar 4th, 2024*
 
 The purpose of this document is to provide an overview of non-EEG datasets obtained from wearable devices and used in 
 research projects of epileptic seizure prediction or forecasting, which are or should become accessible for experimental 
