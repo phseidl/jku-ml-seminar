@@ -2,6 +2,12 @@
 
 - 33 channels @ 250 Hz for 20 min per edf; LowPass at 125.00 Hz
 
+## Access for people using the JKU servers:
+
+TUHEV can be found at: ```/system/user/publicwork/eeg/data/TUH/```
+
+If you need access to the JKU servers - write me a mail.
+
 ## Get access to the dataset
 To request access to the TUH EEG Corpus, please fill out [this form](https://isip.piconepress.com/projects/tuh_eeg/html/data_sharing.pdf), follow the instructions given, and email a signed copy to help@nedcdata.org. Please include "Download The TUH EEG Corpus" in the subject line.
 
