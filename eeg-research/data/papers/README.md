@@ -6,6 +6,7 @@
 - Jozsef Kovacs [Ambulatory seizure forecasting with a wrist-worn device using long-short term memory deep learning](https://www.nature.com/articles/s41598-021-01449-2)
 - Ahmed Mohammed [ThoughtViz: Visualizing Human Thoughts Using Generative
 Adversarial Network](https://dl.acm.org/doi/abs/10.1145/3240508.3240641)
+- Florian Hitzler [Real-Time Seizure Detection using EEG: A Comprehensive Comparison of Recent Approaches under a Realistic Setting](https://arxiv.org/abs/2201.08780)
 
 ## Papers
 
