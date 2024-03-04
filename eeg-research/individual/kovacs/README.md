@@ -25,7 +25,7 @@ The dataset was obtained from: https://www.epilepsyecosystem.org/
 ## Datasets
 
 If you are interested in availability of wearable, non-EEG datasets for seizure prediction and forecasting, 
-this document contains a brief overview: [DS_AVAILABILITY.md](DS_AVAILABILITY.md)   
+this document contains a brief overview: [WEARABLE_DATA.md](../../data/WEARABLE_DATA.md)   
 
 ### My Seizure Gauge dataset  
 
