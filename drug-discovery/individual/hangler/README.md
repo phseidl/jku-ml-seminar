@@ -29,7 +29,7 @@ For now, please follow these steps to set up the project:
 
 ### Next Steps
 
-- Compare the results with established benchmarks such as (Guacamol)[https://github.com/BenevolentAI/guacamol], (MolGPT)(https://pubs.acs.org/doi/10.1021/acs.jcim.1c00600)), and (MolReactGen)[https://github.com/hogru/MolReactGen] to assess COATI's performance.
+- Compare the results with established benchmarks such as [Guacamol](https://github.com/BenevolentAI/guacamol), [MolGPT](https://pubs.acs.org/doi/10.1021/acs.jcim.1c00600), and [MolReactGen](https://github.com/hogru/MolReactGen) to assess COATI's performance.
 - Implement linear probing on molecule net as done in CLAMP.
 - Utilize the embeddings for a classification task.
 
