@@ -4,7 +4,7 @@ Seizure forecasting using wearable devices
 
 *Author: Jozsef Kovacs*  
 *Created: 13/01/2023*  
-*Modified: 03/03/2024*
+*Modified: 06/05/2024*
 
 ---
 
