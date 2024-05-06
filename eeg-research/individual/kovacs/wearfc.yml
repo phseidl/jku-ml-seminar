@@ -1,0 +1,31 @@
+name: wearfc
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - numpy=1.24.3
+  - pandas=2.0.1
+  - pandoc=3.1.2
+  - pandocfilters=1.5.0
+  - scikit-learn=1.2.2
+  - scipy=1.11.4
+  - pytorch
+  - torchaudio
+  - torchvision
+  - pytorch-cuda=11.8
+  - tensorboard=2.16.2
+  - tensorboard-data-server=0.7.0
+  - matplotlib=3.7.1
+  - plotly=5.18.0
+  - antropy=0.1.6
+  - neurokit2=0.2.7
+  - h5py=3.9.0
+  - fastparquet=2023.8.0
+  - hdf5=1.12.1
+  - ipykernel=6.23.0
+  - ipython=8.13.2
+  - ipython_genutils=0.2.0
+  - tqdm=4.65.0
+  - pytables=3.9.2

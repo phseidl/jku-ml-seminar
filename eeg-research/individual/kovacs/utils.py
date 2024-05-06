@@ -14,8 +14,13 @@ Created: 17/02/2024
 import random
 from datetime import datetime
 import numpy as np
+import sklearn
 import torch
 import pickle as pkl
+from pathlib import Path
+import pandas as pd
+
+from sklearn.metrics import roc_curve
 
 # the random seed constant
 RANDOM_SEED = 76
@@ -104,19 +109,44 @@ def retrieve_best_model(config, ModelClass):
     return model
 
 
+def retrieve_model(config, model_file, ModelClass):
+    """
+        Retrieves the best model to the model class.
+
+        :param config: the configuration object (from config.json)
+        :param file: the file containing the pytorch network model
+        :param ModelClass: the model class to restore
+    """
+    model = ModelClass(config.network_config)
+    model.load_state_dict(torch.load(model_file))
+    #model.to(get_default_device())
+    return model
+
+
+def optimal_cutoff(target, predicted):
+    fpr, tpr, threshold = roc_curve(target, predicted)
+    i = np.arange(len(tpr))
+    roc = pd.DataFrame({'tf': pd.Series(tpr - (1 - fpr), index=i), 'threshold': pd.Series(threshold, index=i)})
+    roc_t = roc.iloc[(roc.tf - 0).abs().argsort()[:1]]
+
+    return list(roc_t['threshold'])
+
+
 class TrainingState(object):
     """
         This class holds the variables that describe the state of the training and contains methods, which facilitate
         updating and formatting, printing the current state of training to the console.
     """
 
-    def __init__(self, model: object, model_file: str, train_cfg: object):
+    def __init__(self, model: object, model_dir: Path, model_file: str, train_cfg: object):
         super(TrainingState, self).__init__()
 
         # the model being trained
         self.model = model
         # the model file to store the best model so far
         self.model_file = model_file
+        # epoch model dir
+        self.model_dir = model_dir
 
         # the current epoch
         self.epoch = 0
@@ -125,9 +155,9 @@ class TrainingState(object):
         # the current training loss
         self.loss = torch.tensor(.0)
         # the current validation loss
-        self.validation_loss = np.float('inf')
+        self.validation_loss = float('inf')
         # the minimal validation loss so-far
-        self.min_loss = np.float('inf')
+        self.min_loss = float('inf')
 
         # early stopping parameters
         self.early_stopping = train_cfg.early_stopping
@@ -138,7 +168,7 @@ class TrainingState(object):
 
         # gathers the train losses
         self.train_losses = []
-        self.mean_train_loss = np.float('inf')
+        self.mean_train_loss = float('inf')
 
 
     def format_desc(self):
@@ -155,6 +185,11 @@ class TrainingState(object):
         return f'epoch/step: [{self.epoch:02d}/{self.update_step:06d}] - mean training loss: {self.mean_train_loss:7.5f},' \
                f' val.loss: {self.validation_loss:7.5f}, min.vl: {self.min_loss:7.5f}'
 
+    def save_end_of_epoch(self):
+        device = next(self.model.parameters()).device
+        self.model.to('cpu')
+        torch.save(self.model.state_dict(), self.model_dir / Path(f"model_epoch_{self.epoch:05d}.net"))
+        self.model.to(device)
 
     def save_if_best(self):
         """
@@ -171,7 +206,7 @@ class TrainingState(object):
 
     def step(self, increment=1):
         """
-            Increments the training
+            Increments the training step counter.
         """
         self.update_step += increment
 
@@ -186,7 +221,59 @@ class TrainingState(object):
             Clears the train losses list.
         """
         self.loss = new_loss
-        self.train_losses.append(self.loss)
+        self.train_losses.append(self.loss.detach())
 
     def calulate_mean_train_loss(self):
         self.mean_train_loss = torch.stack(self.train_losses).mean().item()
+
+
+class PredictionResult(object):
+    """
+        This class holds the results of prediction/forecasting.
+    """
+
+    def __init__(self):
+        super(PredictionResult, self).__init__()
+
+        self.true_labels = []
+        self.predicted_probs = []
+        self.predicted_labels = []
+
+    def register(self, true_label, pred_label, pred_prob):
+        self.true_labels.append(true_label)
+        self.predicted_labels.append(pred_label)
+        self.predicted_probs.append(pred_prob)
+
+    def report(self, result_title):
+        tn, fp, fn, tp = sklearn.metrics.confusion_matrix(self.true_labels, self.predicted_labels).ravel()
+        sensitivity = tp / (tp + fn)
+        specificity = tn / (tn + fp)
+        total_cnt = len(self.predicted_labels)
+        correct_cnt = tp + tn
+
+        s = ""
+        s += "\n======================================================"
+        s += f"\nRESULTS REPORT : {result_title}"
+        s += "\n======================================================"
+        s += f"\nTP: {tp}, TN: {tn}, FP: {fp}, FN: {fn}"
+        s += f"\nsensitivity: {sensitivity:1.5f}, specificity: {specificity:1.5f}"
+        s += f"\ntotal_cnt: {total_cnt}, correct_cnt: {correct_cnt}"
+        s += f"\naccuracy: {(correct_cnt / total_cnt) * 100.0:3.2f}%"
+        s += f"\nbalanced accuracy: {((specificity + sensitivity) / 2.) * 100.0:3.2f}%"
+        s += f"\nconfusion matrix:"
+        s += f"\nP                   TRUE CLASS"
+        s += f"\nR            | preictal | interictal| "
+        s += f"\nE            +----------+-----------+"
+        s += f"\nD   preictal |     {tp:>5d}|      {fp:>5d}|"
+        s += f"\nI            |----------------------|"
+        s += f"\nC interictal |     {fn:>5d}|      {tn:>5d}|"
+        s += f"\nT            +----------------------+"
+        s += f"\nE"
+        s += f"\nD\n"
+        s += f"\nROC AUC score: {sklearn.metrics.roc_auc_score(self.true_labels, self.predicted_probs)}"
+        s += f"\nOptimal cutoff threshold: {optimal_cutoff(self.true_labels, self.predicted_probs)}"
+        s += "\nClassification report:"
+        s += f"\n{sklearn.metrics.classification_report(self.true_labels, self.predicted_labels, target_names=['interictal', 'preictal'])}"
+        s += "\n######################################################\n"
+
+        return s

@@ -24,23 +24,25 @@ class SeizureWearableModel(torch.nn.Module):
     The forecasting model in the article used 128 hidden units, 4 layers and a dropout of 0.2.
     """
 
-    def __init__(self, inp_size=None, n_hidden=128, n_layers=4, lstm_drop_prob=0.2, bfc_drop_prob=0.2, out_size=1):
+    def __init__(self, config):
         super(SeizureWearableModel, self).__init__()
 
-        self.inp_size = inp_size
-        self.n_hidden = n_hidden
-        self.n_layers = n_layers
-        self.lstm_drop_prob = lstm_drop_prob
-        self.bfc_drop_prob = bfc_drop_prob
+        self.inp_size = config.input_size
+        self.n_hidden = config.hidden_units
+        self.n_layers = config.lstm_layers
+        self.lstm_drop_prob = config.lstm_dropout
+        self.bfc_drop_prob = config.bfc_dropout
+        self.out_size = config.out_size
 
         self.lstm = nn.LSTM(self.inp_size, self.n_hidden, self.n_layers, dropout=self.lstm_drop_prob, batch_first=True)
         self.dropout = nn.Dropout(self.bfc_drop_prob)
-        self.linear = nn.Linear(self.n_hidden, out_size)
+        self.linear = nn.Linear(self.n_hidden, self.out_size)
 
-    def forward(self, x, hidden):
+    def forward(self, x, hidden=None):
         r_output, hidden = self.lstm(x, hidden)
         out = self.dropout(r_output)
-        out = out.contiguous().view(-1, self.n_hidden)
+        out = out[:, -1, :]
+        #out = out.contiguous().view(-1, self.n_hidden)
         out = self.linear(out)
         return out, hidden
 

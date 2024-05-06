@@ -49,21 +49,24 @@ Command line arguments:
         --restore    : in 'train' mode this switch will restore the last saved model and continue training it
 +----------------------------------------------------------------------------------------------------------------------+
 """
-
-import glob
-import os
 import numpy as np
+import pandas as pd
+import sklearn
 import torch
-from PIL import Image
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import utils
-import datasets
-from utils import console_msg
+from utils import console_msg, PredictionResult
 import importlib
+import preproc_utils as ppu
+from pathlib import Path
+from msg_subject_data import MsgDataHelper
+from datasets import MsgTrainDataset, MsgDatasetInMem, DevDataLoader, MsgPredictionDataset
+from torch.utils.data import DataLoader
+from datetime import datetime
 
 
-def prepare(config: object):
+def preprocess(config: object, mdh: MsgDataHelper):
     """
     This function pre-processes the data for use in training and evaluation. The data is provided for a given time
     period and with a given number of suitable inter-ictal and pre-ictal data segments. The suitable segments have
@@ -72,36 +75,79 @@ def prepare(config: object):
 
     :param config: the configuration object (specified in config.json)
     """
-    metadata = dict()
-    for folder, channels in config.wearable_data.sensor_channels.items():
-        for ch in channels:
-            metadata[(folder, ch)] = get_metadata(DATA_DIR, SUBJECT_ID, folder, ch)
+    # preprocess all subject data referenced in the MsgDataHelper
+    for subject_id, subject_data in mdh.subject_data.items():
+        console_msg(f"##############################################")
+        console_msg(f"### start preprocessing subject ID: {subject_id}")
 
-    x = res[['BVP_BVP', 'TEMP_TEMP', 'EDA_EDA', 'HR_HR', 'ACC_Acc Mag']]
-    tr = preproc_calculate_stft(x, freq=128, seqsize=4, overlap=3, step=5)
+        # find suitable segments and split 2:1
+        subject_data.split_train_test(2/3., 6.)
 
-    # preprocess: calculate SQI for the EDA channel - rate of change in amplitude
-    eda_sqi = eda_sqi_calc(np.asarray(res[['EDA_EDA']]).reshape(-1, ))
+        # calculate means and stds on the training data
+        console_msg("calculate mean and standard deviation for z-scoring...")
+        subject_data.calculate_zscore_params()
 
-    # preprocess: calculate SQI for the BVP channel - spectral entropy
-    bvp_sqi = bvp_sqi_spectral_entropy(np.asarray(res[['BVP_BVP']]).reshape(-1, ), window=4, segsize=60)
+        # dataframe for preprocessing metadata (segment selection)
+        pp_meta = pd.DataFrame(columns=['type', 'start', 'end', 'start_ts', 'end_ts', 'filename'])
+        file_cnt = 0
 
-    # preprocess: calculate SQU for the ACC Mag channel - spectral power ratio
-    accmag_sqi = accmag_sqi_spower_ratio(np.asarray(res[['ACC_Acc Mag']]).reshape(-1), freq=128, window=4, segsize=60,
-                                         physio=(.8, 5.), broadband=(.8, 64.))
+        # preprocess all data segments (train/test and preictal/interictal)
+        console_msg(f">>> start preprocessing segments for: {subject_id}")
+        for data_type, intervals in subject_data.data.items():
+            console_msg(f"processing segment type: {data_type}")
+            # iterate over the suitable 1h intervals
+            cnt = 0
+            for i, interval in enumerate(intervals):
+                start_ts, end_ts = interval
+                console_msg(f"processing '{data_type}' segment: {i}, start: {start_ts} - end: {end_ts}")
+                console_msg(f" > from: {datetime.fromtimestamp(start_ts/1000)} to: {datetime.fromtimestamp(end_ts/1000)}")
 
-    # preprocess: add 24-hour part of the timestamp
-    # [datetime.fromtimestamp(ts) for ts in np.asarray(res[['time']])]
-    h24_info = np.asarray([datetime.fromtimestamp(ts / 1000.0).hour for ts in res[['time']].iloc[:, 0]])
+                # get the actual sensor data from the .parquet files
+                inp_data = subject_data.get_input_data(start_ts, end_ts)
 
-    # concatenate input
-    features = np.hstack([np.asarray(res)[:, 1:], np.repeat(tr, 128, axis=0)[:x.shape[0]], eda_sqi.reshape(-1, 1),
-                          bvp_sqi.reshape(-1, 1), accmag_sqi.reshape(-1, 1), h24_info.reshape(-1, 1)])
+                if inp_data is None:
+                    console_msg(f"ERROR: no data available for {subject_id} in this time interval...")
+                    continue
 
+                for rep in range(config.transforms_config.ratio if data_type == 'preictal_train' else 1):
+                    # for rep in range(1):
+                    aug = "(augmented version " + str(rep) + ")" if rep > 0 else "(original version)"
+                    console_msg(f"{aug}")
+
+                    data = inp_data
+                    if rep > 0:
+                        data = ppu.add_noise3(data, config.wearable_data.freq)
+
+                    # preprocess (FFT, SQI, added 24h time)
+                    console_msg(" > start preprocessing to obtain additional features...")
+                    features = ppu.preprocess(config, data)
+                    features = np.nan_to_num(features)
+                    console_msg(" > finished preprocessing...")
+
+                    # normalize and convert to dataframe
+                    console_msg(" > z-scoring...")
+                    df = pd.DataFrame(ppu.normalize(features, subject_data.means, subject_data.stds))
+
+                    # write result to HDF
+                    path = mdh.preproc_dir / Path(subject_id) / Path(data_type)
+                    path.mkdir(parents=True, exist_ok=True)
+                    filename = path / f'{data_type}_{cnt+1:03d}.h5'
+                    console_msg(f" > start writing prepocessed data to: {filename}")
+                    df.to_hdf(filename, key='df', mode='w', complevel=9, complib='bzip2', format='table')
+                    console_msg(f" > finish writing prepocessed data to: {filename}")
+
+                    pp_meta.loc[file_cnt] = [data_type, datetime.fromtimestamp(start_ts/1000), datetime.fromtimestamp(end_ts/1000), start_ts, end_ts, filename]
+                    file_cnt += 1
+                    cnt += 1
+
+        # write preprocessing metadata to csv
+        pp_meta.to_csv(mdh.preproc_dir / Path(subject_id) / 'pp_metadata.csv', header=True)
+        console_msg(f"### finished preprocessing subject: {subject_id}")
+        console_msg(f"##############################################\n")
 
 
 # training method containing the training loop
-def train(mode: str, config: object, model: object, train_loader: object, val_loader: object):
+def train(mode: str, config: object, model: object, train_loader: object, val_loader: object, train_dir: Path):
     """
     This function prepares and executes the neural network training loop. It implements two training
     phases (modes): 'train' and 'finetune'. These are done on separated training sets and their respective
@@ -118,7 +164,9 @@ def train(mode: str, config: object, model: object, train_loader: object, val_lo
     tr_cfg = config.training_config if mode == 'train' else config.finetune_config
 
     # declare the TensorBoard summary writer to use during the training
-    writer = SummaryWriter(log_dir=os.path.join(config.work_dir, 'tensorboard'))
+    tensorboard_dir = train_dir / Path('tensorboard')
+    tensorboard_dir.mkdir(exist_ok=True)
+    writer = SummaryWriter(log_dir=tensorboard_dir)
 
     # the loss function used is the Binary Cross Entropy
     loss_fn = torch.nn.BCEWithLogitsLoss()
@@ -127,27 +175,31 @@ def train(mode: str, config: object, model: object, train_loader: object, val_lo
     optimizer = torch.optim.Adam(model.parameters(), lr=tr_cfg.learning_rate, weight_decay=tr_cfg.weight_decay)
 
     # init TrainingState object
-    tr_state = utils.TrainingState(model, config.model_file, tr_cfg)
+    model_dir = train_dir / Path(config.model_dir)
+    model_dir.mkdir(exist_ok=True)
+    tr_state = utils.TrainingState(model, model_dir, model_dir / Path(config.model_file), tr_cfg)
 
     # init training loop variables for progress output
     num_epochs = tr_cfg.epochs + 1
-    num_train_samples = train_loader.num_samples
-    num_updates = int(num_train_samples / tr_cfg.batch_size)
+    num_train_samples = len(train_loader)
+    num_updates = int(num_train_samples)
 
     # the training loop
     console_msg("Starting training loop...\n")
     for tr_state.epoch in range(1, num_epochs):
         step_progess_bar = tqdm(total=num_updates, desc=tr_state.format_desc(), position=0)
         console_msg(f"STARTING EPOCH {tr_state.epoch}\n")
-        model.train()
         tr_state.clear_train_losses()
 
         for batch in train_loader:
+            model.train()
             optimizer.zero_grad()
             # execute training step
-            features, targets, idxs = batch
-            pred = model(features)
+            features, targets = batch
+            pred, _ = model(features.float())
+
             # calculate loss
+            targets = torch.unsqueeze(targets, 1)
             tr_state.set_loss(loss_fn(pred, targets))
             # write scalars to board
             writer.add_scalar("training loss", tr_state.loss, tr_state.update_step)
@@ -174,11 +226,11 @@ def train(mode: str, config: object, model: object, train_loader: object, val_lo
             break
 
         # evaluate and log at end of EPOCH
-        eval_and_save(tr_state, model, val_loader, writer, loss_fn)
+        eval_and_save(tr_state, model, val_loader, writer, loss_fn, end_of_epoch=True)
         console_msg(f'FINISHED EPOCH {tr_state.epoch}')
 
 
-def eval_and_save(tr_state: utils.TrainingState, model, val_loader, writer, loss_fn):
+def eval_and_save(tr_state: utils.TrainingState, model, val_loader, writer, loss_fn, end_of_epoch=False):
     """
     This function is responsible for evaluation of the result and logging/writing out the metrics.
 
@@ -191,6 +243,8 @@ def eval_and_save(tr_state: utils.TrainingState, model, val_loader, writer, loss
     # evaluate the model and save it if it has improved
     tr_state.validation_loss = evaluate(model, val_loader, loss_fn)
     tr_state.save_if_best()
+    if end_of_epoch:
+        tr_state.save_end_of_epoch()
     tr_state.calulate_mean_train_loss()
 
     # write evaluation results to the console
@@ -234,10 +288,10 @@ def evaluate(model, data_loader, loss_fn, config=None):
     with torch.no_grad():
         for batch in tqdm(data_loader, desc="...evaluate...", leave=False):
             # inference
-            features, target, idxs = batch
-            pred = model(features)
+            features, target = batch
+            pred, _ = model(features.float())
             # calculate and gather losses
-            val_losses.append(loss_fn(pred, target))
+            val_losses.append(loss_fn(pred, torch.unsqueeze(target, 1)).detach())
 
         # calculate the mean validation loss
         val_loss = torch.stack(val_losses).mean().item()
@@ -245,41 +299,58 @@ def evaluate(model, data_loader, loss_fn, config=None):
     return val_loss
 
 
-def test(config, model, test_loader):
-    """
-    This function executes the evaluation of the model on a separate test set.
-
-    :param config: the configuration object (specified in config.json)
-    :param model: the model being evaluated
-    :param test_loader: the data loader used for the test (evaluation) dataset
-    """
-    console_msg("Starting testing loop...")
-    loss_fn = torch.nn.BCEWithLogitsLoss()
-    test_loss = evaluate(model, test_loader, loss_fn, config=config)
-    console_msg('Evaluation loss:', test_loss)
-
-
-def forecast(config, model):
+def forecast(config, model, forecast_ds):
     """
     This function is used for forecasting from unseen data.
 
     :param config: the configuration object (specified in config.json)
     :param model: the model used for inference
     """
-    # initialize the prediction data loader
-    pred_dl = datasets.init_forecasting_loaders(config)
     # set evaluation mode
     model.eval()
+    model.to(config.device)
+    model.float()
     # without gradient updates
     with torch.no_grad():
         # the list to gather the result 1-D numpy arrays
-        result_array_list = list()
-        for batch in tqdm(pred_dl, desc="predict", position=0):
-            # TODO: forecasting from coninuously read input by averaging over 4-min windows
-            pass
+        results = {'unit': PredictionResult(), 'window': PredictionResult(), 'segment': PredictionResult()}
+        window = config.eval_window
+        threshold = config.eval_threshold
+        console_msg(f" - window length: {window:>5d}")
+        console_msg(f" - threshold val: {threshold:>3.2f}")
+        for segment, label, data_type, filename, start, end in forecast_ds:
+            console_msg(f" >>> data type: {data_type}, filename: {filename}")
+            console_msg(f" >>> from: {start} to: {end}")
+            hidden = None
+            result_array_list = list()
+            for part_idx in range(segment.shape[0] // window):
+                mean_prob, max_prob, positive, total = 0., 0., 0, 0
+                for seq_idx in range(window):
+                    total += 1
+                    idx = window * part_idx + seq_idx
+                    input = segment[idx:idx+1, :, :]
+                    input = utils.to_device(input, torch.device(config.device))
+                    pred, (h_0, c_0) = model(input.float(), hidden)
+                    hidden = (h_0.detach(), c_0.detach())
+                    act_pred = torch.special.expit(pred).cpu().detach()
+                    mean_prob += act_pred.item()
+                    max_prob = max(max_prob, act_pred)
+                    console_msg(f"{idx + 1:02d}:: prob: {act_pred.item():1.5f} vs. label: {torch.round(label)}")
+                    pred_label = round(forecast_ds.LABEL_1 if act_pred.item() > threshold else forecast_ds.LABEL_0)
+                    positive += pred_label
+                    results['unit'].register(torch.round(label), pred_label, act_pred.item())
 
-    # write the pkl output
-    utils.write_list_to_pkl(result_array_list, config.submission_pkl)
+                mean_prob /= window * 1.0
+                results['window'].register(torch.round(label), round((forecast_ds.LABEL_1 if max_prob >= threshold else forecast_ds.LABEL_0)), mean_prob)
+                result_array_list.append(mean_prob)
+                console_msg(f"{part_idx+1:02d}. {window}m-seg: mean prob:", mean_prob)
+
+            forecast_prob = max(result_array_list)
+            results['segment'].register(torch.round(label), round((forecast_ds.LABEL_1 if forecast_prob > threshold else forecast_ds.LABEL_0)), forecast_prob)
+            console_msg("\n====\n", f" <<FORECAST>> max prob: {forecast_prob:1.5f} vs. label: {torch.round(label)}", "\n====\n")
+
+        for key, res in results.items():
+            print("\n" + res.report(key) + "\n")
 
 
 
@@ -294,44 +365,71 @@ def main(args, config):
     """
     # the mode of operation
     mode = args.mode
+
     # the model class to use (name defined in config.json) :: if there are model variations
     model_class_ = getattr(importlib.import_module("model"), config.network_config.model_class)
+
+    # initialize the MsgDataHelper for this config
+    mdh = MsgDataHelper(config, args.subjects)
 
     if mode == 'preprocess':
         # the separate preparation phase
         console_msg('Preprocessing the input parquet files of subjects for training...')
-        prepare(config)
-    else:
-        # initialize datasets and dataloaders
-        # TODO: initialize the datasets and loaders
-        train_dl, finetune_dl, val_dl, test_dl = datasets.init_datasets_and_loaders(mode, config)
-        # model is restored - unless this is the initial training
-        if args.restore or mode != 'train':
-            # restore model state
-            model = utils.retrieve_best_model(config, model_class_)
-        else:
-            # create new mode class - start from scratch
-            model = model_class_(config.network_config)
+        preprocess(config, mdh)
+
+    elif mode == 'train':
+        # create new mode class - start from scratch
+        model = model_class_(config.network_config)
 
         # move model to default device
         model.to(utils.get_default_device())
 
-        if mode == 'train':
-            # training mode
-            console_msg('Training...')
-            train(mode, config, model, train_dl, val_dl)
-        elif mode == 'finetune':
-            # finetuning mode
-            console_msg('Finetuning...')
-            train(mode, config, model, finetune_dl, val_dl)
-        elif mode == 'eval':
-            # evaluation mode
-            console_msg('Evaluating...')
-            test(config, model, test_dl)
-        elif mode == 'forecast':
-            # prediction mode
-            console_msg('Forecasting - forecasting using unseen signals/interval...')
-            forecast(config, model)
+        # training mode
+        console_msg('Training...')
+        # initialize and load the "in-memory" dataset
+        dataset = MsgDatasetInMem(mdh, args.subjects[0])
+
+        # split and prepare training and validation loaders
+        val_size = int(len(dataset) * config.dataset_config.valid_ratio)
+        train_size = len(dataset) - val_size
+        train_ds, val_ds = torch.utils.data.random_split(dataset, [train_size, val_size])
+        model = model.float()
+        model.to(config.device)
+        train_dl = DevDataLoader(DataLoader(train_ds, batch_size=config.training_config.batch_size, shuffle=True), train_size, torch.device(config.device))
+        valid_dl = DevDataLoader(DataLoader(val_ds, batch_size=config.training_config.batch_size, shuffle=False), val_size, torch.device(config.device))
+
+        # prepare training work directory
+        train_work_dir = Path(config.project_root) / Path(config.train_dir) / Path(args.subjects[0])
+        train_work_dir.mkdir(exist_ok=True)
+
+        # execute the training loop
+        train(mode, config, model, train_dl, valid_dl, train_work_dir)
+
+    elif mode == 'finetune':
+        # finetuning mode
+        console_msg('Finetuning...')
+        #train(mode, config, model, finetune_dl, val_dl)
+
+    elif mode == 'forecast':
+
+        console_msg('Training...')
+        # split and prepare training and validation loaders
+        train_work_dir = Path(config.project_root) / Path(config.train_dir) / Path(args.subjects[0])
+        model_file = Path(train_work_dir) / Path(config.model_dir) / Path(args.model_file)
+        model = utils.retrieve_model(config, model_file, model_class_)
+
+        console_msg("-------------------")
+        console_msg("# FORECASTING     #")
+        console_msg("-------------------")
+        # forecasting dataset
+        forecast_ds = MsgPredictionDataset(mdh, args.subjects[0])
+        console_msg('Forecasting - forecasting using unseen segments/intervals...')
+        console_msg(f"dataset lenght: {len(forecast_ds)} x 1-hour recordings")
+
+        forecast(config, model, forecast_ds)
+
+    else:
+        console_msg(f'ERROR: mode not implemented: {mode}')
 
 
 if __name__ == '__main__':
@@ -347,13 +445,17 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--config', type=str, default='./config.json',
                         help='the path and name of the config file')
     parser.add_argument('-m', '--mode', type=str, default='train',
-                        help='the mode of operation: prepare / train / eval / predict')
+                        help='the mode of operation: preprocess / train / forecast')
     parser.add_argument('-r', '--restore', action='store_true',
                         help='restore last saved state and continue training (for mode: train)')
+    parser.add_argument('-s', '--subjects', nargs='*', type=str, default=None,
+                        help='subject identifier(s) to process (eg. MSEL_01676)')
+    parser.add_argument('-f', '--model_file', type=str, default='best_model.net',
+                        help='the saved model file to use in evaluation and forecasting')
     args = parser.parse_args()
 
     console_msg('##################################################')
-    console_msg('# SEIZURE FORECASTRING FROM WEARABLE DEVICES     #')
+    console_msg('# SEIZURE FORECASTING USING WEARABLE DEVICES     #')
     console_msg('##################################################\n')
 
     try:
