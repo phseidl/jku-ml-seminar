@@ -49,10 +49,9 @@ Command line arguments:
         --restore    : in 'train' mode this switch will restore the last saved model and continue training it
 +----------------------------------------------------------------------------------------------------------------------+
 """
-import numpy as np
-import pandas as pd
-import sklearn
 import torch
+import pandas as pd
+from torch.optim.lr_scheduler import StepLR
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import utils
@@ -60,10 +59,11 @@ from utils import console_msg, PredictionResult
 import importlib
 import preproc_utils as ppu
 from pathlib import Path
-from msg_subject_data import MsgDataHelper
-from datasets import MsgTrainDataset, MsgDatasetInMem, DevDataLoader, MsgPredictionDataset
+from msg_subject_data import MsgDataHelper, MsgSubjectData
+from datasets import DevDataLoader, MsgPredictionDataset, MsgTensorDataset
 from torch.utils.data import DataLoader
 from datetime import datetime
+import click
 
 
 def preprocess(config: object, mdh: MsgDataHelper):
@@ -73,77 +73,123 @@ def preprocess(config: object, mdh: MsgDataHelper):
     to be preprocessed before directly used as input to the neural network. Preprocessing involves merging the data
     from different sensor files, calculating the additional FFT, SQI, hour-of-day channels and normalizing.
 
-    :param config: the configuration object (specified in config.json)
+    :param config:  the configuration object (specified in config.json)
+    :param mdh:     an auxiliary MsgDataHelper object used as the dataset descriptor and manager
     """
     # preprocess all subject data referenced in the MsgDataHelper
     for subject_id, subject_data in mdh.subject_data.items():
         console_msg(f"##############################################")
         console_msg(f"### start preprocessing subject ID: {subject_id}")
 
-        # find suitable segments and split 2:1
-        subject_data.split_train_test(2/3., 6.)
+        # find suitable segments (lead seizure and interictal separation) and split 2:1 (train:test)
+        subject_data.split_train_test(config.dataset_config.train_test_split, config.transforms_config.ratio)
+        subject_data.print_preprocessing_summary()
+        if not args.force_yes and not click.confirm('Do you want to continue with these settings?', default=True):
+            exit()
 
-        # calculate means and stds on the training data
-        console_msg("calculate mean and standard deviation for z-scoring...")
-        subject_data.calculate_zscore_params()
+        # data augmentation (preictal/training)
+        if config.transforms_config.augment:
+            subject_data.augmentation()
 
-        # dataframe for preprocessing metadata (segment selection)
-        pp_meta = pd.DataFrame(columns=['type', 'start', 'end', 'start_ts', 'end_ts', 'filename'])
-        file_cnt = 0
+        # load previously saved scaler or calculate means and stds on the training data
+        if subject_data.scaler is None or not config.dataset_config.reuse_scaler:
+            console_msg("calculate mean and standard deviation for z-scoring...")
+            subject_data.calculate_zscore_params(config)
+        else:
+            console_msg("using previously saved and now reloaded scaler for z-scoring...")
 
-        # preprocess all data segments (train/test and preictal/interictal)
-        console_msg(f">>> start preprocessing segments for: {subject_id}")
-        for data_type, intervals in subject_data.data.items():
-            console_msg(f"processing segment type: {data_type}")
-            # iterate over the suitable 1h intervals
-            cnt = 0
-            for i, interval in enumerate(intervals):
-                start_ts, end_ts = interval
-                console_msg(f"processing '{data_type}' segment: {i}, start: {start_ts} - end: {end_ts}")
-                console_msg(f" > from: {datetime.fromtimestamp(start_ts/1000)} to: {datetime.fromtimestamp(end_ts/1000)}")
+        # preprocess for each split
+        for split in range(subject_data.num_split_combinations):
 
-                # get the actual sensor data from the .parquet files
-                inp_data = subject_data.get_input_data(start_ts, end_ts)
+            # dataframe for preprocessing metadata (segment selection)
+            pp_meta = pd.DataFrame(columns=['type', 'start', 'end', 'start_ts', 'end_ts', 'filename'])
+            segment_index = 0
 
-                if inp_data is None:
-                    console_msg(f"ERROR: no data available for {subject_id} in this time interval...")
-                    continue
+            # preprocess all data segments (train/test and preictal/interictal)
+            console_msg(f">>> start preprocessing segments for: {subject_id}, split combination: {split}")
 
-                for rep in range(config.transforms_config.ratio if data_type == 'preictal_train' else 1):
-                    # for rep in range(1):
-                    aug = "(augmented version " + str(rep) + ")" if rep > 0 else "(original version)"
-                    console_msg(f"{aug}")
+            # preprocess data segments
+            for data_type in ['preictal_train', 'interictal_train', 'preictal_test', 'interictal_test']:
+                file_cnt = 1
+                console_msg(f"processing segment type: {data_type}, split combination: {split}")
 
-                    data = inp_data
-                    if rep > 0:
-                        data = ppu.add_noise3(data, config.wearable_data.freq)
+                # preprocess the original segments - iterate over the suitable 1h intervals
+                interval_list = subject_data.data[split][data_type] if data_type.startswith("preictal_") else subject_data.data[data_type]
+                for i, interval in enumerate(interval_list):
+                    start_ts, end_ts = interval
+                    console_msg(f"processing '{data_type}' segment: {i}, start: {start_ts} - end: {end_ts}")
+                    console_msg(
+                        f" > from: {datetime.fromtimestamp(start_ts / 1000)} to: {datetime.fromtimestamp(end_ts / 1000)}")
 
-                    # preprocess (FFT, SQI, added 24h time)
-                    console_msg(" > start preprocessing to obtain additional features...")
-                    features = ppu.preprocess(config, data)
-                    features = np.nan_to_num(features)
-                    console_msg(" > finished preprocessing...")
+                    # get the actual sensor data from the .parquet files
+                    inp_data = subject_data.get_input_data(start_ts, end_ts)
 
-                    # normalize and convert to dataframe
-                    console_msg(" > z-scoring...")
-                    df = pd.DataFrame(ppu.normalize(features, subject_data.means, subject_data.stds))
+                    if inp_data is None:
+                        console_msg(f"ERROR: no data available for {subject_id} in this time interval...")
+                        continue
 
-                    # write result to HDF
-                    path = mdh.preproc_dir / Path(subject_id) / Path(data_type)
-                    path.mkdir(parents=True, exist_ok=True)
-                    filename = path / f'{data_type}_{cnt+1:03d}.h5'
-                    console_msg(f" > start writing prepocessed data to: {filename}")
-                    df.to_hdf(filename, key='df', mode='w', complevel=9, complib='bzip2', format='table')
-                    console_msg(f" > finish writing prepocessed data to: {filename}")
+                    # preprocess and save features to HDF file
+                    preprocess_and_save_segment(split, subject_data, data_type, file_cnt, segment_index, start_ts, end_ts, inp_data, pp_meta)
 
-                    pp_meta.loc[file_cnt] = [data_type, datetime.fromtimestamp(start_ts/1000), datetime.fromtimestamp(end_ts/1000), start_ts, end_ts, filename]
+                    segment_index += 1
                     file_cnt += 1
-                    cnt += 1
 
-        # write preprocessing metadata to csv
-        pp_meta.to_csv(mdh.preproc_dir / Path(subject_id) / 'pp_metadata.csv', header=True)
+                # add the synthetic preictal segments - if data augmentation was applied
+                if data_type == 'preictal_train' and not subject_data.augmented_preictal_train is None:
+                    console_msg(f"processing synthetic preictal_train segments - DATA AUGMENTATION")
+                    for key, inp_data in subject_data.augmented_preictal_train[split].items():
+                        start_ts, end_ts, i = key
+                        console_msg(f"processing augmented: {i}, start: {start_ts} - end: {end_ts}")
+                        console_msg(
+                            f" > from: {datetime.fromtimestamp(start_ts / 1000)} to: {datetime.fromtimestamp(end_ts / 1000)}")
+
+                        # preprocess and save features to HDF file
+                        preprocess_and_save_segment(split, subject_data, data_type, file_cnt, segment_index, start_ts, end_ts, inp_data, pp_meta)
+
+                        segment_index += 1
+                        file_cnt += 1
+
+            # write preprocessing metadata to csv - will be used later by training/testing stages
+            pp_meta.to_csv(mdh.preproc_dir / Path(subject_id) / Path(f'split_{split:03d}') / 'pp_metadata.csv', header=True)
+            console_msg(f"--- finished preprocessing split {split} for subject: {subject_id}")
+
         console_msg(f"### finished preprocessing subject: {subject_id}")
         console_msg(f"##############################################\n")
+
+
+def preprocess_and_save_segment(split: int, subject_data: MsgSubjectData, data_type: str, file_cnt: int,
+                                segment_index: int, start_ts, end_ts, data: pd.DataFrame, pp_meta: pd.DataFrame):
+    """
+    Auxiliary function for calling preprocessing on a given 1-hour data segment, standardizing the obtained features
+    and writing the preprocessed output to HDF files.
+
+    :param split:        the index of the preictal split combination belonging to this preprocessing run
+    :param subject_data: the auxiliary subject data descriptor object
+    :param data_type:    the type of the data segment (e.g. 'preictal_test')
+    :param cnt:          the index of the current segment (and file) in the sequence of processed segments
+    :param data:         the raw data features of the segment (time (1) + signals (8) channels)
+    """
+
+    # preprocess (FFT, SQI, added 24h time - extends data with additional features)
+    console_msg(" > start preprocessing to obtain additional features...")
+    features = ppu.preprocess(config, data)
+    console_msg(" > finished preprocessing...")
+
+    # standardize and convert to dataframe
+    console_msg(" > z-scoring / standardize...")
+    df = pd.DataFrame(subject_data.scaler[split].transform(features))
+
+    # write preprocessed result to HDF
+    path = subject_data.mdh.preproc_dir / Path(subject_data.subject_id) / Path(f'split_{split:03d}') / Path(data_type)
+    path.mkdir(parents=True, exist_ok=True)
+    filename = path / f'{data_type}_{file_cnt:03d}.h5'
+    console_msg(f" > start writing prepocessed data to: {filename}")
+    df.to_hdf(filename, key='df', mode='w', complevel=9, complib='bzip2', format='table')
+    console_msg(f" > finish writing prepocessed data to: {filename}")
+
+    # update preprocessed metadata table
+    pp_meta.loc[segment_index] = [data_type, datetime.fromtimestamp(start_ts / 1000),
+                                  datetime.fromtimestamp(end_ts / 1000), start_ts, end_ts, filename]
 
 
 # training method containing the training loop
@@ -173,6 +219,9 @@ def train(mode: str, config: object, model: object, train_loader: object, val_lo
 
     # the optimizer is Adam
     optimizer = torch.optim.Adam(model.parameters(), lr=tr_cfg.learning_rate, weight_decay=tr_cfg.weight_decay)
+
+    # learning rate scheduler
+    scheduler = StepLR(optimizer, step_size=tr_cfg.scheduler_step, gamma=tr_cfg.scheduler_gamma)
 
     # init TrainingState object
     model_dir = train_dir / Path(config.model_dir)
@@ -213,7 +262,7 @@ def train(mode: str, config: object, model: object, train_loader: object, val_lo
             optimizer.step()
 
             # evaluate and log at specified periods
-            if tr_state.update_step % tr_cfg.evaluate_at == 0:
+            if tr_cfg.evaluate_at != 0 and tr_state.update_step % tr_cfg.evaluate_at == 0:
                 eval_and_save(tr_state, model, val_loader, writer, loss_fn)
                 # early stopping
                 if tr_state.stop_training:
@@ -228,6 +277,9 @@ def train(mode: str, config: object, model: object, train_loader: object, val_lo
         # evaluate and log at end of EPOCH
         eval_and_save(tr_state, model, val_loader, writer, loss_fn, end_of_epoch=True)
         console_msg(f'FINISHED EPOCH {tr_state.epoch}')
+
+        # adjust learning rate
+        scheduler.step()
 
 
 def eval_and_save(tr_state: utils.TrainingState, model, val_loader, writer, loss_fn, end_of_epoch=False):
@@ -299,13 +351,29 @@ def evaluate(model, data_loader, loss_fn, config=None):
     return val_loss
 
 
-def forecast(config, model, forecast_ds):
+def forecast(config, args, model_class_, mdh, split_folder):
     """
     This function is used for forecasting from unseen data.
 
     :param config: the configuration object (specified in config.json)
     :param model: the model used for inference
     """
+    subject_id = args.subjects[0]
+    console_msg("#" + "-" * 120)
+    console_msg(f"# FORECASTING     subject: {subject_id}")
+    console_msg("#" + "-" * 120)
+
+    # split and prepare training and validation loaders
+    train_work_dir = Path(config.project_root) / Path(config.train_dir) / Path(subject_id) / Path(split_folder)
+    model_file = Path(train_work_dir) / Path(config.model_dir) / Path(args.model_file)
+    console_msg(f" > retrieve model to use for forecasting: {model_file} ")
+    model = utils.retrieve_model(config, model_file, model_class_)
+
+    # forecasting dataset
+    forecast_ds = MsgPredictionDataset(mdh, args.subjects[0], split_folder)
+    console_msg(' > Forecasting - forecasting using unseen segments/intervals...')
+    console_msg(f" > dataset lenght: {len(forecast_ds)} x {args.forecast_segsize}-min recordings")
+
     # set evaluation mode
     model.eval()
     model.to(config.device)
@@ -313,17 +381,21 @@ def forecast(config, model, forecast_ds):
     # without gradient updates
     with torch.no_grad():
         # the list to gather the result 1-D numpy arrays
-        results = {'unit': PredictionResult(), 'window': PredictionResult(), 'segment': PredictionResult()}
+        results = {'unit': PredictionResult('unit'), 'window': PredictionResult('window'), 'segment': PredictionResult('segment')}
         window = config.eval_window
         threshold = config.eval_threshold
-        console_msg(f" - window length: {window:>5d}")
-        console_msg(f" - threshold val: {threshold:>3.2f}")
-        for segment, label, data_type, filename, start, end in forecast_ds:
-            console_msg(f" >>> data type: {data_type}, filename: {filename}")
-            console_msg(f" >>> from: {start} to: {end}")
+        console_msg(f" - segment length:      {args.forecast_segsize:>5d}")
+        console_msg(f" - window length:       {window:>5d}")
+        console_msg(f" - default threshold:   {threshold:>8.2f}")
+
+        for segment, label, data_type, filename, start, end in tqdm(forecast_ds):
+            nr_units_in_segment = segment.shape[0]
             hidden = None
             result_array_list = list()
-            for part_idx in range(segment.shape[0] // window):
+            window_count = segment.shape[0] // window
+            start_window = int(window_count * ((nr_units_in_segment - args.forecast_segsize) / nr_units_in_segment))
+            for part_idx in range(start_window, window_count):
+
                 mean_prob, max_prob, positive, total = 0., 0., 0, 0
                 for seq_idx in range(window):
                     total += 1
@@ -335,23 +407,78 @@ def forecast(config, model, forecast_ds):
                     act_pred = torch.special.expit(pred).cpu().detach()
                     mean_prob += act_pred.item()
                     max_prob = max(max_prob, act_pred)
-                    console_msg(f"{idx + 1:02d}:: prob: {act_pred.item():1.5f} vs. label: {torch.round(label)}")
                     pred_label = round(forecast_ds.LABEL_1 if act_pred.item() > threshold else forecast_ds.LABEL_0)
                     positive += pred_label
-                    results['unit'].register(torch.round(label), pred_label, act_pred.item())
+                    # register result for the given unit
+                    results['unit'].register(torch.round(label), pred_label, act_pred.item(),
+                                             f"{idx + 1:02d} at T-{nr_units_in_segment-idx-1 + mdh.preictal_setback:02d}min",
+                                             split_folder)
 
+                # register forecasting results for the window (mean over units)
                 mean_prob /= window * 1.0
-                results['window'].register(torch.round(label), round((forecast_ds.LABEL_1 if max_prob >= threshold else forecast_ds.LABEL_0)), mean_prob)
+                results['window'].register(torch.round(label), round((forecast_ds.LABEL_1 if mean_prob >= threshold else forecast_ds.LABEL_0)),
+                                           mean_prob, f"{part_idx + 1:02d} of length {window}m", split_folder)
                 result_array_list.append(mean_prob)
-                console_msg(f"{part_idx+1:02d}. {window}m-seg: mean prob:", mean_prob)
 
+            # register forecasting results for the segment (max over window means)
             forecast_prob = max(result_array_list)
-            results['segment'].register(torch.round(label), round((forecast_ds.LABEL_1 if forecast_prob > threshold else forecast_ds.LABEL_0)), forecast_prob)
-            console_msg("\n====\n", f" <<FORECAST>> max prob: {forecast_prob:1.5f} vs. label: {torch.round(label)}", "\n====\n")
+            results['segment'].register(torch.round(label), round((forecast_ds.LABEL_1 if forecast_prob > threshold else forecast_ds.LABEL_0)),
+                                        forecast_prob, f" from: {start} to: {end}, data type: {data_type}, filename: {Path(filename).name}", split_folder)
 
+        # adjust predicted labels with opt.cutoff from ROC
+        for res in results.values():
+            res.calculate_adjusted_predictions()
+
+        # detailed report of predictions
+        print("\n#" + "-" * 120)
+        print("#   D E T A I L E D   R E P O R T                    #")
+        print("#" + "-" * 120 + "\n")
+
+        for seg_idx, seg_title in enumerate(results['segment'].titles):
+            print("#" * 120)
+            print(f"<<< START SEGMENT {seg_title}")
+            window_count = args.forecast_segsize // window
+            start_window = int(window_count * ((60 - args.forecast_segsize) / 60))
+            for part_idx in range(start_window, window_count):
+                print(f"\n<<< START WINDOW {results['window'].titles[seg_idx * window_count + part_idx]} >>>")
+                for seq_idx in range(window):
+                    idx = nr_units_in_segment * seg_idx + window * part_idx + seq_idx
+                    print(f"...unit {results['unit'].titles[idx]} | {results['unit'].get_result_string(idx)}")
+                print(f"<<< END WINDOW {results['window'].titles[seg_idx * window_count + part_idx]} | {results['window'].get_result_string(seg_idx * window_count + part_idx)} >>>")
+
+            print( "#" + "-" * 120)
+            print(f"# <<< END SEGMENT | {results['segment'].get_result_string(seg_idx)} >>>")
+            print( "#" + "-" * 120 + "\n\n")
+
+        # print results report and write result and summary files
         for key, res in results.items():
-            print("\n" + res.report(key) + "\n")
+            print("\n" + res.report(key, len(results['segment']), split_folder, adjusted=True) + "\n")
 
+        return results
+
+
+def write_forecasting_results(args, config, res_dict):
+
+    results_dir = Path(config.project_root) / Path(config.results_dir) / Path(args.subjects[0])
+    Path.mkdir(results_dir, parents=True, exist_ok=True)
+
+    summaries_dict = {'unit': [], 'window': [], 'segment': []}
+    predictions_dict = {'unit': [], 'window': [], 'segment': []}
+    for key in ['unit', 'window', 'segment']:
+        for split_folder, results in res_dict.items():
+            summaries_dict[key] += results[key].result_summary
+            predictions_dict[key] += results[key].predictions
+
+        pred_df = pd.DataFrame(predictions_dict[key],
+                               columns=['split', 'true_label', 'predicted_label', 'predicted_prob', 'remark'])
+        summary_df = pd.DataFrame(summaries_dict[key],
+                                  columns=['split', 'TP', 'FP', 'FN', 'TN', 'sensitivity', 'specificty',
+                                           'total', 'correct', 'ROC AUC', 'ROC AUC p-value',
+                                           'random ROC AUC (mean)', 'random ROC AUC (std)',
+                                           'AP', 'AP p-value', 'random AP (mean)', 'random AP (std)',
+                                           'opt.cutoff', 'accuracy', 'balanced accuracy'])
+        pred_df.to_csv(Path(results_dir / Path(f"{key}_predictions.csv")))
+        summary_df.to_csv(Path(results_dir / Path(f"{key}_summary.csv")))
 
 
 def main(args, config):
@@ -378,32 +505,45 @@ def main(args, config):
         preprocess(config, mdh)
 
     elif mode == 'train':
-        # create new mode class - start from scratch
-        model = model_class_(config.network_config)
+        if config.cross_validation:
+            path = Path(config.project_root) / Path(config.preproc_dir) / Path(args.subjects[0])
+            split_combinations = [sf.name for sf in list(path.glob("split_*"))]
+        else:
+            split_combinations = ['split_000']
 
-        # move model to default device
-        model.to(utils.get_default_device())
+        for split_folder in split_combinations:
+            # restore saved model and continue training
+            if args.restore:
+                train_work_dir = Path(config.project_root) / Path(config.train_dir) / Path(args.subjects[0]) / Path(split_folder)
+                model_file = Path(train_work_dir) / Path(config.model_dir) / Path(args.model_file)
+                model = utils.retrieve_model(config, model_file, model_class_)
+            else:
+                # create new mode class - start from scratch
+                model = model_class_(config.network_config)
 
-        # training mode
-        console_msg('Training...')
-        # initialize and load the "in-memory" dataset
-        dataset = MsgDatasetInMem(mdh, args.subjects[0])
+            # move model to default device
+            model.to(utils.get_default_device())
 
-        # split and prepare training and validation loaders
-        val_size = int(len(dataset) * config.dataset_config.valid_ratio)
-        train_size = len(dataset) - val_size
-        train_ds, val_ds = torch.utils.data.random_split(dataset, [train_size, val_size])
-        model = model.float()
-        model.to(config.device)
-        train_dl = DevDataLoader(DataLoader(train_ds, batch_size=config.training_config.batch_size, shuffle=True), train_size, torch.device(config.device))
-        valid_dl = DevDataLoader(DataLoader(val_ds, batch_size=config.training_config.batch_size, shuffle=False), val_size, torch.device(config.device))
+            # training mode
+            console_msg('Training...')
+            # initialize and load the "in-memory" dataset
+            dataset = MsgTensorDataset(mdh, args.subjects[0], split_folder, sequence_length=60)
 
-        # prepare training work directory
-        train_work_dir = Path(config.project_root) / Path(config.train_dir) / Path(args.subjects[0])
-        train_work_dir.mkdir(exist_ok=True)
+            # split and prepare training and validation loaders
+            val_size = int(len(dataset) * config.dataset_config.valid_ratio)
+            train_size = len(dataset) - val_size
+            train_ds, val_ds = torch.utils.data.random_split(dataset, [train_size, val_size])
+            model = model.float()
+            model.to(config.device)
+            train_dl = DevDataLoader(DataLoader(train_ds, batch_size=config.training_config.batch_size, shuffle=True), train_size, torch.device(config.device))
+            valid_dl = DevDataLoader(DataLoader(val_ds, batch_size=config.training_config.batch_size, shuffle=False), val_size, torch.device(config.device))
 
-        # execute the training loop
-        train(mode, config, model, train_dl, valid_dl, train_work_dir)
+            # prepare training work directory
+            train_work_dir = Path(config.project_root) / Path(config.train_dir) / Path(args.subjects[0]) / Path(split_folder)
+            train_work_dir.mkdir(parents=True, exist_ok=True)
+
+            # execute the training loop
+            train(mode, config, model, train_dl, valid_dl, train_work_dir)
 
     elif mode == 'finetune':
         # finetuning mode
@@ -411,22 +551,17 @@ def main(args, config):
         #train(mode, config, model, finetune_dl, val_dl)
 
     elif mode == 'forecast':
+        if config.cross_validation:
+            path = Path(config.project_root) / Path(config.preproc_dir) / Path(args.subjects[0])
+            split_combinations = [sf.name for sf in list(path.glob("split_*"))]
+        else:
+            split_combinations = ['split_000']
 
-        console_msg('Training...')
-        # split and prepare training and validation loaders
-        train_work_dir = Path(config.project_root) / Path(config.train_dir) / Path(args.subjects[0])
-        model_file = Path(train_work_dir) / Path(config.model_dir) / Path(args.model_file)
-        model = utils.retrieve_model(config, model_file, model_class_)
+        res_dict = {}
+        for split_folder in split_combinations:
+            res_dict[split_folder] = forecast(config, args, model_class_, mdh, split_folder)
 
-        console_msg("-------------------")
-        console_msg("# FORECASTING     #")
-        console_msg("-------------------")
-        # forecasting dataset
-        forecast_ds = MsgPredictionDataset(mdh, args.subjects[0])
-        console_msg('Forecasting - forecasting using unseen segments/intervals...')
-        console_msg(f"dataset lenght: {len(forecast_ds)} x 1-hour recordings")
-
-        forecast(config, model, forecast_ds)
+        write_forecasting_results(args, config, res_dict)
 
     else:
         console_msg(f'ERROR: mode not implemented: {mode}')
@@ -452,6 +587,10 @@ if __name__ == '__main__':
                         help='subject identifier(s) to process (eg. MSEL_01676)')
     parser.add_argument('-f', '--model_file', type=str, default='best_model.net',
                         help='the saved model file to use in evaluation and forecasting')
+    parser.add_argument('-g', '--forecast_segsize', type=int, default=60,
+                        help='the size of the segment considered at forecasting')
+    parser.add_argument('-y', '--force_yes', action='store_true',
+                        help='continue assuming yes was answered to prompts')
     args = parser.parse_args()
 
     console_msg('##################################################')

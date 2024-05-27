@@ -17,8 +17,12 @@ import numpy as np
 import scipy.signal
 import antropy as apy
 from seerpy.utils import plot_eeg
+from utils import console_msg
 
 from msg_subject_data import MsgSubjectData
+from sklearn.preprocessing import StandardScaler
+from skimage.measure import block_reduce
+from scipy.signal import butter, filtfilt
 
 
 def get_subject_path(data_dir, subject_id):
@@ -154,7 +158,7 @@ def plot_all_channels(df, start=0, length=1*60*128):
         plot_eeg(x=plot_data)
 
 
-def preproc_calculate_stft(df, freq=128, seg_size=4, overlap=3, pool_size=16):
+def preproc_calculate_stft(df, freq=128, seg_size=4, overlap=3, freq_pool=16, time_pool=1):
     df = df.fillna(0)
     data = np.transpose(df.values.tolist())
     f, t, Zxx = scipy.signal.stft(
@@ -165,17 +169,27 @@ def preproc_calculate_stft(df, freq=128, seg_size=4, overlap=3, pool_size=16):
         noverlap=overlap,
         scaling="psd",
         return_onesided=True,
+        boundary=None
     )
 
-    res = np.swapaxes(Zxx, 1, 2)
+    rZxx = block_reduce(np.abs(Zxx), block_size=(1, freq_pool, time_pool), func=np.max)
+
+    res = np.swapaxes(rZxx, 1, 2)
     res = np.swapaxes(res, 0, 1)
 
     res = np.reshape(res, (res.shape[0], -1))
-    res = res.real.astype(np.float64)
 
-    if pool_size > 0:
-        res = np.reshape(res[:, :-(res.shape[1] % pool_size)],
-                         (res.shape[0], res.shape[1] // pool_size, pool_size)).mean(axis=2)
+    # pad if necessary
+    exp_shape = data.shape[1] // freq
+    if res.shape[0] < exp_shape:
+        res = np.concatenate([res, res[-(exp_shape-res.shape[0]):]], axis=0)
+
+    # import matplotlib.pyplot as plt
+    # plt.plot(np.arange(4096), data[0, :4096])
+    # plt.show()
+    # rf = f[0::8]
+    # tf = t[0::1]
+    # plt.pcolormesh(tf, rf, rZxx, vmin=0, vmax=0.5)
 
     return res
 
@@ -215,8 +229,9 @@ def preprocess(config, df: pd.DataFrame):
 
     # preprocess: calculate short-time FFT for selected channels
     x = df[['BVP_BVP', 'TEMP_TEMP', 'EDA_EDA', 'HR_HR', 'ACC_Acc Mag']]
-    tr = preproc_calculate_stft(x, freq=config.wearable_data.freq, seg_size=config.stft.seg_size,
-                                overlap=config.stft.overlap, pool_size=config.stft.pool_size)
+    tr = preproc_calculate_stft(x, freq=config.stft.freq, seg_size=config.stft.seg_size,
+                                overlap=config.stft.overlap, freq_pool=config.stft.freq_pool,
+                                time_pool=config.stft.time_pool)
 
     # preprocess: calculate SQI for the EDA channel - rate of change in amplitude
     eda_sqi = eda_sqi_calc(np.asarray(df[['EDA_EDA']]).reshape(-1,))
@@ -231,9 +246,6 @@ def preprocess(config, df: pd.DataFrame):
     h24_info = np.asarray([datetime.fromtimestamp(ts/1000.0).hour for ts in df[['time']].iloc[:,0]])
 
     # concatenate input
-    #features = np.hstack([np.asarray(df)[:, 1:], np.repeat(tr, 4*128, axis=0)[:x.shape[0]], eda_sqi.reshape(-1, 1), bvp_sqi.reshape(-1, 1), accmag_sqi.reshape(-1, 1), h24_info.reshape(-1, 1)])
-    #features = np.hstack([np.asarray(df)[:, 1:], np.repeat(tr, 4 * 128, axis=0)[:x.shape[0]], eda_sqi.reshape(-1, 1),
-    #                      bvp_sqi.reshape(-1, 1), accmag_sqi.reshape(-1, 1)])
     data = np.asarray(df)[:, 1:]
     sqi = np.hstack([eda_sqi.reshape(-1, 1), bvp_sqi.reshape(-1, 1), accmag_sqi.reshape(-1, 1)])
     avg_dim = config.stft.seg_size - config.stft.overlap
@@ -245,8 +257,21 @@ def preprocess(config, df: pd.DataFrame):
         ft = np.repeat(tr, avg_dim, axis=0)[:data.shape[0]]
 
     features = np.hstack([data, ft, sqi])
+    features = np.nan_to_num(features)
 
     return features
+
+
+def create_std_scaler(data_dir, subject_id, metadata, available_channels, intervals):
+    scaler = StandardScaler()
+    for iv in intervals:
+        start_ts, end_ts = iv
+        inp_data = get_input_data(data_dir, subject_id, metadata, available_channels, start_ts, end_ts)
+        if inp_data is None or len(inp_data) == 0:
+            continue
+        d = np.nan_to_num(inp_data)
+        scaler.partial_fit(d)
+    return scaler
 
 
 def calc_z_score(config, data_dir, subject_id, metadata, available_channels, intervals, feature_dim):
@@ -298,6 +323,58 @@ def calc_z_score2(data):
     return means, stds
 
 
+def add_random_noise(inp_data, freq, noise_factor=0.1):
+    size, feature_dim = inp_data.shape
+    d = np.array(inp_data, copy=True).swapaxes(0, 1).reshape(feature_dim, -1, freq)
+    m = np.median(d, axis=2)
+    r = np.random.uniform(low=0., high=1.-1e-12, size=m.shape)
+    d = d + (m * r * noise_factor)[:, :, None]
+    #d = d + (r * m).reshape(feature_dim, r.shape[1], 1).repeat(128, axis=2)
+    d = d.reshape(feature_dim, size).swapaxes(0, 1)
+    console_msg("HELLO")
+    return d
+
+
+def add_signal_based_noise(df):
+    original_data = df.to_numpy()
+    augmented_copy = np.empty_like(original_data)
+    augmented_copy[:, 0] = original_data[:, 0]
+
+    # BVP
+    augmented_copy[:, 1] = smooth_magnitude_warping(original_data[:, 1], mu=1.0, sigma=0.35, noise_factor=1.0, cutoff=0.075, fs=128.0)
+    # TEMP
+    augmented_copy[:, 2] = smooth_additive_gaussian(original_data[:, 2], mu=0.0, sigma=1.0, noise_factor=0.05, cutoff=0.01, fs=128.0)
+
+    # EDA, HR, ACCmag,x,y,z
+    for ch in range(3, 9):
+        augmented_copy[:, ch] = smooth_additive_gaussian(original_data[:, ch], mu=0.0, sigma=1.0, noise_factor=0.12, cutoff=0.075, fs=128.0)
+
+    return pd.DataFrame(augmented_copy, columns=df.columns)
+
+
+def smooth_magnitude_warping(signal, mu=1.0, sigma=0.35, noise_factor=0.1, cutoff=0.1, fs=128.0):
+    random_factor = np.random.normal(mu, sigma, signal.shape)
+    smooth_factor = smooth_lowpass_filter(random_factor, cutoff=cutoff, fs=fs)
+    return signal * smooth_factor * noise_factor
+
+
+def smooth_additive_gaussian(signal, mu=0.0, sigma=1.0, noise_factor=0.1, cutoff=0.1, fs=128.0):
+    random_noise = np.random.normal(mu, sigma, signal.shape)
+    smooth_noise = smooth_lowpass_filter(random_noise, cutoff=cutoff, fs=fs)
+    median_value = np.median(signal)
+    scaled_noise = smooth_noise * median_value * noise_factor
+    noisy_signal = signal + scaled_noise
+    return noisy_signal
+
+
+def smooth_lowpass_filter(signal, cutoff=0.1, fs=128.0):
+    # low-pass Butterworth filter
+    nyquist = 0.5 * fs
+    normal_cutoff = cutoff / nyquist
+    b, a = butter(4, normal_cutoff, btype='low', analog=False)
+    return filtfilt(b, a, signal, method='gust')
+
+
 def add_noise(inp_data, freq):
     a = np.array(inp_data, dtype=np.float32)
     for j in range(0, a.shape[0], freq):
@@ -318,6 +395,7 @@ def add_noise2(inp_data, freq):
     a = np.nan_to_num(a)
     return pd.DataFrame(a, columns=inp_data.columns)
 
+
 def add_noise3(inp_data, freq):
     offset = np.random.randint(1, 15) * 8
     a = np.array(inp_data, dtype=np.float32)
@@ -328,3 +406,14 @@ def add_noise3(inp_data, freq):
         a[j:j + freq, 1:] = (1. - noise_ratio) * d + noise_ratio * np.median(d, axis=0)
     a = np.nan_to_num(a)
     return pd.DataFrame(a, columns=inp_data.columns)
+
+
+def add_noise4(inp_data, freq):
+    a = np.array(inp_data, dtype=np.float32)
+    for j in range(0, a.shape[0], freq):
+        med =  np.median(a[j:j + freq, 1:], axis=0)
+        rnd = np.random.uniform(0., 1. - 1e-5, 1)
+        a[j:j + freq, 1:] += med * rnd
+    a = np.nan_to_num(a)
+    return pd.DataFrame(a, columns=inp_data.columns)
+

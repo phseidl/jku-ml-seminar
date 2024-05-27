@@ -25,6 +25,7 @@ from sklearn.metrics import roc_curve
 # the random seed constant
 RANDOM_SEED = 76
 
+
 def ts_fmt():
     """
         This function returns an ISO formatted timestamp of the current datetime.
@@ -132,6 +133,24 @@ def optimal_cutoff(target, predicted):
     return list(roc_t['threshold'])
 
 
+def metric_with_p_value(metric, y_true, y_pred_proba, n_permutations=10000, units_in_seg=60):
+    actual_metric = metric(y_true, y_pred_proba)
+    random_metric = []
+    seg_labels = np.asarray(y_true)[::units_in_seg]
+    count = 0
+    for _ in range(n_permutations):
+        permutes_segments = np.random.permutation(seg_labels)
+        permuted_labels = permutes_segments.repeat(units_in_seg)
+        permuted_metric = metric(permuted_labels, y_pred_proba)
+        random_metric.append(permuted_metric)
+        if permuted_metric >= actual_metric:
+            count += 1
+    p_value = (count + 1) / (n_permutations + 1)
+    random_mean = np.asarray(random_metric).mean()
+    random_std = np.asarray(random_metric).std()
+    return actual_metric, p_value, random_mean, random_std
+
+
 class TrainingState(object):
     """
         This class holds the variables that describe the state of the training and contains methods, which facilitate
@@ -232,34 +251,75 @@ class PredictionResult(object):
         This class holds the results of prediction/forecasting.
     """
 
-    def __init__(self):
+    def __init__(self, name: str):
         super(PredictionResult, self).__init__()
-
+        self.name = name
         self.true_labels = []
         self.predicted_probs = []
         self.predicted_labels = []
+        self.titles = []
+        self.predictions = []
+        self.result_summary = []
 
-    def register(self, true_label, pred_label, pred_prob):
+    def __len__(self):
+        return len(self.true_labels)
+
+    def register(self, true_label, pred_label, pred_prob, title, split_folder):
         self.true_labels.append(true_label)
         self.predicted_labels.append(pred_label)
         self.predicted_probs.append(pred_prob)
+        self.titles.append(title)
+        self.predictions.append([split_folder, true_label.item(), pred_label, pred_prob, title])
 
-    def report(self, result_title):
-        tn, fp, fn, tp = sklearn.metrics.confusion_matrix(self.true_labels, self.predicted_labels).ravel()
+    def get_result_string(self, index: int = -1):
+        return f" probability: {self.predicted_probs[index]:1.5f}, "\
+               f"predicted label: {self.predicted_labels[index]}, true label: {self.true_labels[index]}, "\
+               f"correct: {'[..OK..]' if self.predicted_labels[index] == self.true_labels[index] else '[......]'}"
+
+    def calculate_adjusted_predictions(self):
+        # determine optimal cutoff
+        self.opt_cutoff = optimal_cutoff(self.true_labels, self.predicted_probs)[0]
+        # re-evaluate with optimal cutoff
+        self.adjusted_predictions = [1. if pp >= self.opt_cutoff else 0. for pp in self.predicted_probs]
+
+
+
+    def report(self, result_title, nr_of_segments, split_folder, adjusted: bool = False):
+        tn, fp, fn, tp = sklearn.metrics.confusion_matrix(self.true_labels,
+                                                          self.adjusted_predictions if adjusted else self.predicted_labels).ravel()
         sensitivity = tp / (tp + fn)
         specificity = tn / (tn + fp)
         total_cnt = len(self.predicted_labels)
         correct_cnt = tp + tn
 
+        units_in_seg = len(self) // nr_of_segments
+        n_permutations = 1000
+        roc_auc, roc_pval, random_roc_mean, random_roc_std = metric_with_p_value(sklearn.metrics.roc_auc_score, self.true_labels, self.predicted_probs,
+                                                n_permutations=n_permutations, units_in_seg=units_in_seg)
+        ap_score, ap_pval, random_ap_mean, random_ap_std = metric_with_p_value(sklearn.metrics.average_precision_score, self.true_labels, self.predicted_probs,
+                                                n_permutations=n_permutations, units_in_seg=units_in_seg)
+
+        accuracy = (correct_cnt / total_cnt) * 100.0
+        balanced_accuracy = ((specificity + sensitivity) / 2.) * 100.0
+
+        self.result_summary.append([split_folder, tp, fp, fn, tn, sensitivity, specificity, total_cnt, correct_cnt, roc_auc,
+                                    roc_pval, random_roc_mean, random_roc_std, ap_score, ap_pval, random_ap_mean,
+                                    random_ap_std, self.opt_cutoff, accuracy, balanced_accuracy])
+
         s = ""
         s += "\n======================================================"
         s += f"\nRESULTS REPORT : {result_title}"
         s += "\n======================================================"
+        s += f"\nROC AUC score: {roc_auc:3.2f} (p-value={roc_pval:1.5f} from {n_permutations} permutations)"
+        s += f"\n   - random ROC AUC score: {random_roc_mean:3.2f} ({random_roc_std:3.2f})"
+        s += f"\nAP score (precision-recall): {ap_score:3.2f} (p-value={ap_pval:1.5f} from {n_permutations} permutations)"
+        s += f"\n   - random AP score: {random_ap_mean:3.2f} ({random_ap_std:3.2f})"
+        s += f"\nOptimal cutoff threshold (ROC): {self.opt_cutoff:1.5f}"
         s += f"\nTP: {tp}, TN: {tn}, FP: {fp}, FN: {fn}"
         s += f"\nsensitivity: {sensitivity:1.5f}, specificity: {specificity:1.5f}"
         s += f"\ntotal_cnt: {total_cnt}, correct_cnt: {correct_cnt}"
-        s += f"\naccuracy: {(correct_cnt / total_cnt) * 100.0:3.2f}%"
-        s += f"\nbalanced accuracy: {((specificity + sensitivity) / 2.) * 100.0:3.2f}%"
+        s += f"\naccuracy: {accuracy:3.2f}%"
+        s += f"\nbalanced accuracy: {balanced_accuracy:3.2f}%"
         s += f"\nconfusion matrix:"
         s += f"\nP                   TRUE CLASS"
         s += f"\nR            | preictal | interictal| "
@@ -270,8 +330,6 @@ class PredictionResult(object):
         s += f"\nT            +----------------------+"
         s += f"\nE"
         s += f"\nD\n"
-        s += f"\nROC AUC score: {sklearn.metrics.roc_auc_score(self.true_labels, self.predicted_probs)}"
-        s += f"\nOptimal cutoff threshold: {optimal_cutoff(self.true_labels, self.predicted_probs)}"
         s += "\nClassification report:"
         s += f"\n{sklearn.metrics.classification_report(self.true_labels, self.predicted_labels, target_names=['interictal', 'preictal'])}"
         s += "\n######################################################\n"

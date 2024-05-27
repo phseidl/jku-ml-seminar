@@ -12,7 +12,7 @@ This file contains the dataset and dataloader class definitions.
 +----------------------------------------------------------------------------------------------------------------------+
 """
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, TensorDataset
 import utils
 from utils import console_msg
 from msg_subject_data import MsgDataHelper, MsgSubjectData
@@ -103,6 +103,46 @@ class MsgTrainDataset(Dataset):
         return None, None, None, idx
 
 
+class MsgTensorDataset(TensorDataset):
+    """
+        Custom training dataset class for the My Seizure Gauge data obtained from Epilepsyecosystem.org.
+    """
+    def __init__(self, mdh: MsgDataHelper, subject_id: str, split_folder: str, sequence_length: int = 60, sampling_freq: int = 128):
+
+        console_msg(f"STARTED LOADING THE DATASET... {subject_id}")
+        self.sampling_freq = sampling_freq
+        self.sequence_length = sequence_length
+        self.input_size = mdh.input_size
+        self.feature_list = []
+        self.target_list = []
+
+        # label values
+        self.LABEL_0, self.LABEL_1 = mdh.LABEL_0, mdh.LABEL_1
+
+        preictal_cnt = 0
+        interictal_cnt = 0
+        pp_meta = pd.read_csv(mdh.preproc_dir / Path(subject_id) / Path(split_folder) / 'pp_metadata.csv')
+        for data_type, label in [('preictal_train', self.LABEL_1), ('interictal_train', self.LABEL_0)]:
+            for file in pp_meta['filename'][pp_meta['type'] == data_type]:
+                if data_type == 'preictal_train':
+                    preictal_cnt += 1
+                else:
+                    interictal_cnt += 1
+                console_msg(f"processing: {file}")
+                df = pd.read_hdf(file, key='df', mode='r')
+                a = np.array(df, dtype=np.float32)
+                mult = self.sampling_freq // (mdh.config.stft.seg_size if mdh.config.stft.reduce else 1)
+                a = np.nan_to_num(a.reshape(-1, mult * self.sequence_length, self.input_size))
+                self.feature_list.append(a)
+                self.target_list += [label] * a.shape[0]
+
+        # initialize superclass with features & labels
+        self.features = torch.from_numpy(np.vstack(self.feature_list))
+        self.labels = torch.tensor(self.target_list, dtype=torch.float32)
+        super().__init__(self.features, self.labels)
+        console_msg(f"FINISHED LOADING THE DATASET... {subject_id}, number of segments: {len(self)}")
+
+
 class MsgDatasetInMem(Dataset):
     """
         Custom dataset class for the My Seizure Gauge data obtained from Epilepsyecosystem.org.
@@ -116,6 +156,7 @@ class MsgDatasetInMem(Dataset):
         self.preictal_augment_factor = preictal_augment_factor
         self.input_size = mdh.input_size
         self.lookup_table = []
+        self.targets = []
 
         # label values
         self.LABEL_0, self.LABEL_1 = mdh.LABEL_0, mdh.LABEL_1
@@ -137,51 +178,26 @@ class MsgDatasetInMem(Dataset):
                 a = np.nan_to_num(a.reshape(-1, mult * self.sequence_length, self.input_size))
                 self.lookup_table.append((index, index + a.shape[0], a, label))
                 index += a.shape[0]
+                self.targets += [label] * a.shape[0]
 
         console_msg(f"FINISHED LOADING THE DATASET... {subject_id}, number of segments: {len(self)}")
-
-        # find min-max for entire dataset
-        # check if preprocessed min-max params exist
-        # statfile = Path(mdh.preproc_dir / Path(subject_id) / Path('preproc_ds_stat.csv'))
-        # if statfile.exists() and statfile.is_file():
-        #     self.ds_stat = pd.read_csv(statfile)
-        #     dstat = self.ds_stat.to_numpy()
-        #     self.dmin = dstat[0, 1:]
-        #     self.dmax = dstat[1, 1:]
-        # else:
-        #     self.dmin = np.full_like(self.lookup_table[0][2][0, 0, :], fill_value=np.inf, dtype=np.float32)
-        #     self.dmax = np.full_like(self.lookup_table[0][2][0, 0, :], fill_value=-np.inf, dtype=np.float32)
-        #     for entry in self.lookup_table:
-        #         d = entry[2]
-        #         self.dmin = np.minimum(self.dmin, d.min(axis=(0, 1)))
-        #         self.dmax = np.maximum(self.dmax, d.max(axis=(0, 1)))
-        #
-        #     self.ds_stat = pd.DataFrame(np.vstack((self.dmin, self.dmax)))
-        #     self.ds_stat.to_csv(statfile)
-        #
-        # # apply min-max scaling
-        # for entry in self.lookup_table:
-        #     d = entry[2]
-        #     d -= self.dmin
-        #     d /= (self.dmax - self.dmin)
-        #     d *= 2.
-        #     d -= 1.
-            #console_msg(f"{entry[0]:06d} - {entry[1]:06d} :: {entry[2].shape} :: min: {d.min(axis=0)[:5]} :: max: {d.max(axis=0)[:5]}")
-            #console_msg(f"{entry[0]:06d} - {entry[1]:06d} :: {entry[2].shape} :: isnan? {np.isnan(entry[2]).any()} :: {entry[3]}")
 
     def __len__(self):
         # TODO: dataset size calculcation
         return 0 if len(self.lookup_table) == 0 else self.lookup_table[-1][1]
 
     def __getsegment__(self, idx):
-        if idx >= len(self):
-            return None
+        ind_list = [idx] if not isinstance(idx, list) else idx
+        if (ind_list >= len(self)).any():
+            raise IndexError(f"at least one specified index is greater than the dataset size {len(self)}")
 
-        for i, entry in enumerate(self.lookup_table):
-            if entry[0] <= idx < entry[1]:
-                return entry[2][idx - entry[0], :, :], entry[3]
+        seglist = []
+        for ind in ind_list:
+            for entry in self.lookup_table:
+                if entry[0] <= ind < entry[1]:
+                    seglist.append(entry[2][ind - entry[0], :, :], entry[3])
+        return seglist
 
-        return None
     def __getitem__(self, key):
         data = self.__getsegment__(key)
         if data is None:
@@ -193,7 +209,7 @@ class MsgPredictionDataset(Dataset):
     """
         Custom dataset class for the My Seizure Gauge data obtained from Epilepsyecosystem.org.
     """
-    def __init__(self, mdh: MsgDataHelper, subject_id: str, sequence_length: int = 60, sampling_freq: int = 128):
+    def __init__(self, mdh: MsgDataHelper, subject_id: str, split_folder: str, sequence_length: int = 60, sampling_freq: int = 128):
 
         self.sampling_freq = sampling_freq
         self.sequence_length = sequence_length
@@ -214,7 +230,7 @@ class MsgPredictionDataset(Dataset):
         self.mdh = mdh
 
         # initialize dataset - training files
-        pp_meta = pd.read_csv(mdh.preproc_dir / Path(subject_id) / 'pp_metadata.csv')
+        pp_meta = pd.read_csv(mdh.preproc_dir / Path(subject_id) / Path(split_folder) / 'pp_metadata.csv')
         self.file_meta = pp_meta[(pp_meta['type'] == 'preictal_test') | (pp_meta['type'] == 'interictal_test')].reset_index()
         #for data_type in ['preictal_test', 'interictal_test']:
         #    self.filelist = [(file, data_type) for file in pp_meta['filename'][pp_meta['type'] == data_type]]

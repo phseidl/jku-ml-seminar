@@ -10,6 +10,7 @@ dependencies:
   - pandoc=3.1.2
   - pandocfilters=1.5.0
   - scikit-learn=1.2.2
+  - scikit-image=0.19.3
   - scipy=1.11.4
   - pytorch
   - torchaudio
@@ -29,3 +30,10 @@ dependencies:
   - ipython_genutils=0.2.0
   - tqdm=4.65.0
   - pytables=3.9.2
+  - click=8.1.7
+  - openssl=3.3.0
+  - bokeh=3.4.1
+  - colorcet=3.1.0
+  - datashader=0.16.1
+  - holoviews=1.18.3
+  - umap-learn=0.5.5
