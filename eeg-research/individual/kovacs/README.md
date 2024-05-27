@@ -72,12 +72,36 @@ download process will also provide the Byteflies (*BF*) and *Epilog* data, where
 ## Resources, code
 
 Jupyter notebooks used for exploring the dataset structure and content, preprocessing possibilities:
-* [explore_msg_data.ipynb](explore_msg_data.ipynb)  :   dataset content exploration and analysis  
-* [preproc_data.ipynb](preproc_data.ipynb)       :   dataset preparation and preprocessing methods  
+* [explore_msg_data.ipynb](analysis/explore_msg_data.ipynb)  :   dataset content exploration and analysis  
+* [preproc_data.ipynb](analysis/preproc_data.ipynb)       :   dataset preparation and preprocessing methods
+* [explore_pp_data.ipynb](analysis/explore_pp_data.ipynb)  : exploration of preprocessed data
 
 The solution consists of the following modules:  
 * `main.py`     : the executable Main module containing the preparing, training, evaluation and prediction algorithms
 * `datasets.py` : contains the custom datasets, data loaders and auxiliary methods related to data loading
+* `msg_subject_data.py` : dataset helper and subject data manager class
 * `model.py`    : contains the neural network model definitions
 * `preproc_utils.py`    : functions for using and preprocessing the MSG dataset
 * `utils.py`    : auxiliary and utility functions
+
+## Configuration
+
+Most configuration parameters are set in the `config.json` file.
+
+// TODO: description of configuration parameters. 
+
+## Usage
+
+### Preprocessing
+
+`python3 -u main.py --mode preprocess --subjects <subject_ID>`
+
+### Training
+
+`python3 -u main.py --mode train --subjects <subject_ID>`
+
+### Forecasting
+
+`python3 -u main.py --mode forecast --subjects <subject_ID>`
+
+
