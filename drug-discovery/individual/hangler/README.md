@@ -9,8 +9,8 @@ The `coati` directory is from the original COATI repository with some minor chan
 Clone the repository to your local machine to get started with the setup:
 
 ```bash
-git clone https://github.com/StefanHangler/COATI-Model-Evaluation.git
-cd COATI-Model-Evaluation
+git clone https://github.com/phseidl/jku-ml-seminar23.git
+cd jku-ml-seminar23/edit/main/drug-discovery/individual/hangler
 ```
 
 ## Option 1: Using Conda
