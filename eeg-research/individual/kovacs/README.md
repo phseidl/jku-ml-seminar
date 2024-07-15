@@ -88,62 +88,62 @@ The solution consists of the following modules:
 
 Most configuration parameters are set in the `config.json` file.
 
-| Configuration parameter              | Description                                                                       |
-| ------------------------------------ | --------------------------------------------------------------------------------- |
-| device                               | preferred device to use (cpu, cuda, mps)                                          |
-| num_workers                          | number of workers in the dataloader                                               |
-| project_root                         | root directory of the project files (data, models and results)                    |
-| input_dir                            | subdirectory under data_root containing the raw MSG E4 data input                 |
-| preproc_dir                          | subdirectory under data_root, where preprocessed data is saved                    |
-| train_dir                            | subdirectory under data_root to store training files (tensorboard log and models) |
-| results_dir                          | subdirectory under data_root, where forecasting results are saved                 |
-| model_file                           | default model file name to store the best model                                   |
-| eval_threshold                       | default evaluation threshold for the binary classifier (e.g. 0.5)                 |
-| eval_window                          | window size for evaluation (minutes)                                              |
-| lead_seizure_separation              | separation of lead seizures in minutes                                            |
-| preictal_setback                     | preictal setback time in minutes                                                  |
-| interictal_separation                | interictal separation time in minutes                                             |
-| target_labels                        | target label values to use                                                        |
-| cross_validation                     | indicates if cross-validation should be used                                      |
-| wearable_data/subjects               | list of subjects to process (command line overrides this setting)                 |
-| wearable_data/freq                   | sampling frequency of the raw input data                                          |
-| wearable_data/physio_band            | physiological narrowband limits (list of two values) for AccMag SQI calculation   |
-| wearable_data/broad_band             | broadband limits (list of two values) for AccMag SQI calculation                  |
-| wearable_data/no_overlap             | number of overlaping frames in spectral power SQI calculation                     |
-| wearable_data/device                 | type of wearable device                                                           |
-| wearable_data/device/sensor_channels | list of the channels of the raw input                                             |
-| stft/freq                            | frequency for the Short-time Fourier Transform                                    |
-| stft/seg_size                        | segment size for the Short-time Fourier Transform                                 |
-| stft/overlap                         | overlap size for the Short-time Fourier Transform                                 |
-| stft/freq_pool                       | max-pooling window size for frequency for the Short-time Fourier Transform        |
-| stft/time_pool                       | max-pooling window size for time-domain in STFT                                   |
-| stft/reduce                          | apply time-dimension reduction                                                    |
-| dataset_config/train_test_split      | the train/test split ratio to use (from the dataset)                              |
-| dataset_config/valid_ratio           | the validation/train ratio to use (from the train set)                            |
-| dataset_config/finetune_ratio        | n/a                                                                               |
-| dataset_config/scoring_set_size      | n/a                                                                               |
-| dataset_config/reuse_scaler          | indicates if re-calculating scaler for z-scoring should be omitted                |
-| dataset_config/exclude_threshold     | threshold for exclusion based on signal absence or low variability                |
-| transforms_config/augment            | indicates if data augmentation should be applied                                  |
-| transforms_config/type               | type of data augmentation                                                         |
-| transforms_config/ratio              | max. number of copies to create                                                   |
-| training_config/epochs               | number of training epochs (max.)                                                  |
-| training_config/batch_size           | batch size to use during training                                                 |
-| training_config/learning_rate        | learning rate to use during training                                              |
-| training_config/weight_decay         | weight decay for the Adam optimizer                                               |
-| training_config/evaluate_at          | step count to evaluate at                                                         |
-| training_config/early_stopping       | indicates if early stopping should be applied                                     |
-| training_config/early_stop_threshold | number of epochs without improvement that renders stopping                        |
-| training_config/scheduler_step       | step size for the LR scheduler (StepLR)                                           |
-| training_config/scheduler_gamma      | gamma value for the LR scheduler (StepLR)                                         |
-| network_config/model_class           | the name of the modell class to use                                               |
-| network_config/input_size            | the input size (feature input dimension for a single frame)                       |
-| network_config/lstm_layers           | number of LSTM layers                                                             |
-| network_config/hidden_units          | number of hidden units in the LSTM                                                |
-| network_config/fc                    | linear layer input, output dimensions (list of two values)                        |
-| network_config/lstm_dropout          | dropout rate between the LSTM layers                                              |
-| network_config/bfc_dropout           | dropout rate before the fully-connected layer                                     |
-| network_config/out_size              | output dimension                                                                  |
+| Category      | Configuration parameter              | Description                                                                       |
+| ------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
+| environment   | device                               | preferred device to use (cpu, cuda, mps)                                          |
+| environment   | project_root                         | root directory of the project files (data, models and results)                    |
+| environment   | input_dir                            | subdirectory under data_root containing the raw MSG E4 data input                 |
+| environment   | preproc_dir                          | subdirectory under data_root, where preprocessed data is saved                    |
+| environment   | train_dir                            | subdirectory under data_root to store training files (tensorboard log and models) |
+| environment   | results_dir                          | subdirectory under data_root, where forecasting results are saved                 |
+| environment   | model_file                           | default model file name to store the best model                                   |
+| training      | num_workers                          | number of workers in the dataloader                                               |
+| training      | training_config/learning_rate        | learning rate to use during training                                              |
+| training      | training_config/weight_decay         | weight decay for the Adam optimizer                                               |
+| training      | training_config/evaluate_at          | step count to evaluate at                                                         |
+| training      | training_config/early_stopping       | indicates if early stopping should be applied                                     |
+| training      | training_config/early_stop_threshold | number of epochs without improvement that renders stopping                        |
+| training      | training_config/scheduler_step       | step size for the LR scheduler (StepLR)                                           |
+| training      | training_config/scheduler_gamma      | gamma value for the LR scheduler (StepLR)                                         |
+| evaluation    | eval_threshold                       | default evaluation threshold for the binary classifier (e.g. 0.5)                 |
+| evaluation    | eval_window                          | window size for evaluation (minutes)                                              |
+| evaluation    | lead_seizure_separation              | separation of lead seizures in minutes                                            |
+| evaluation    | preictal_setback                     | preictal setback time in minutes                                                  |
+| evaluation    | interictal_separation                | interictal separation time in minutes                                             |
+| evaluation    | target_labels                        | target label values to use                                                        |
+| evaluation    | cross_validation                     | indicates if cross-validation should be used                                      |
+| wearable | wearable_data/subjects               | list of subjects to process (command line overrides this setting)                 |
+| wearable | wearable_data/freq                   | sampling frequency of the raw input data                                          |
+| wearable | wearable_data/physio_band            | physiological narrowband limits (list of two values) for AccMag SQI calculation   |
+| wearable | wearable_data/broad_band             | broadband limits (list of two values) for AccMag SQI calculation                  |
+| wearable | wearable_data/no_overlap             | number of overlaping frames in spectral power SQI calculation                     |
+| wearable | wearable_data/device                 | type of wearable device                                                           |
+| wearable | wearable_data/device/sensor_channels | list of the channels of the raw input                                             |
+| preprocessing | stft/freq                            | frequency for the Short-time Fourier Transform                                    |
+| preprocessing | stft/seg_size                        | segment size for the Short-time Fourier Transform                                 |
+| preprocessing | stft/overlap                         | overlap size for the Short-time Fourier Transform                                 |
+| preprocessing | stft/freq_pool                       | max-pooling window size for frequency for the Short-time Fourier Transform        |
+| preprocessing | stft/time_pool                       | max-pooling window size for time-domain in STFT                                   |
+| preprocessing | stft/reduce                          | apply time-dimension reduction                                                    |
+| dataset | dataset_config/train_test_split      | the train/test split ratio to use (from the dataset)                              |
+| dataset | dataset_config/valid_ratio           | the validation/train ratio to use (from the train set)                            |
+| dataset | dataset_config/finetune_ratio        | n/a                                                                               |
+| dataset | dataset_config/scoring_set_size      | n/a                                                                               |
+| dataset | dataset_config/reuse_scaler          | indicates if re-calculating scaler for z-scoring should be omitted                |
+| dataset | dataset_config/exclude_threshold     | threshold for exclusion based on signal absence or low variability                |
+| transforms | transforms_config/augment            | indicates if data augmentation should be applied                                  |
+| transforms | transforms_config/type               | type of data augmentation                                                         |
+| transforms | transforms_config/ratio              | max. number of copies to create                                                   |
+| transforms | training_config/epochs               | number of training epochs (max.)                                                  |
+| transforms | training_config/batch_size           | batch size to use during training                                                 |
+| architecture | network_config/model_class           | the name of the modell class to use                                               |
+| architecture | network_config/input_size            | the input size (feature input dimension for a single frame)                       |
+| architecture | network_config/lstm_layers           | number of LSTM layers                                                             |
+| architecture | network_config/hidden_units          | number of hidden units in the LSTM                                                |
+| architecture | network_config/fc                    | linear layer input, output dimensions (list of two values)                        |
+| architecture | network_config/lstm_dropout          | dropout rate between the LSTM layers                                              |
+| architecture | network_config/bfc_dropout           | dropout rate before the fully-connected layer                                     |
+| architecture | network_config/out_size              | output dimension                                                                  |
 
 
 ## Usage
