@@ -1,0 +1,30 @@
+#xLSTM hyperparameter
+xLSTM:
+  cfg:
+    mlstm_block:
+      mlstm:
+        conv1d_kernel_size: 4
+        qkv_proj_blocksize: 4
+        num_heads: 3
+    slstm_block:
+      slstm:
+        backend: vanilla
+        num_heads: 3
+        conv1d_kernel_size: 4
+        bias_init: powerlaw_blockdependent
+      feedforward:
+        proj_factor: 1.3
+        act_fn: gelu
+    context_length: 512
+    num_blocks: 3
+    embedding_dim: 18
+    slstm_at: [0,1,2]
+  learning_rate: 0.01
+  batch_size: 32
+  
+#CLEEGN hyperparameter
+CLEEGN:
+  learning_rate: 0.01
+  batch_size: 32
+  n_chan: 18
+  N_F: 18   #model parameter, equal to channel number
