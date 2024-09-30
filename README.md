@@ -1,4 +1,5 @@
-# Seminar and Master's Thesis Repository
+# Seminar Project and Master's Thesis Repository
+for work supervised by Seidl.
 
 Meeting: every Monday 14-15:00 SP13 S318 or via [zoom](https://jku.zoom.us/j/98032906314?pwd=ZFRQVDA5UVU1T0d6U0R2eGljQjF3dz09)
 
@@ -45,7 +46,8 @@ Within the projects a suggestion would be:
 -- 
 please all try to mentain a README for both projects
 
-each project should have a `setup.py` and a `env.yml`, I will provide a base, which you can modify.
+each individual project should have a `setup.py` and a `env.yml`, `README.md`, `PROGRESS.md`, I will provide a base, which you can modify.
+
 
 ## Getting Started
 
