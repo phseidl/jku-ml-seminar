@@ -14,13 +14,11 @@ def process_data(data_dir, save_location, channels):
         os.mkdir(os.path.join(save_location, 'edf'))
     if not os.path.isdir(os.path.join(save_location, 'labels')):
         os.mkdir(os.path.join(save_location, 'labels'))
-    if not os.path.isdir(os.path.join(save_location, 'edf-split')):
-        os.mkdir(os.path.join(save_location, 'edf-split'))
-    if not os.path.isdir(os.path.join(save_location, 'edf-raw')):
-        os.mkdir(os.path.join(save_location, 'edf-raw'))
     # get list of patients
     patients = os.listdir(data_dir)
     patients_path = [os.path.join(data_dir, f_) for f_ in patients]
+    no_of_seizures = 0
+    no_of_non_seizures = 0
     for iPatient in range(len(patients_path)):
         patient = patients_path[iPatient]
         # get list of sessions for patient
@@ -49,8 +47,7 @@ def process_data(data_dir, save_location, channels):
                     if sfreq < 200:
                         print('Sampling frequency is less than 200Hz')
                         continue
-                    # resample to 200Hz
-                    eeg.resample(200)
+
                     # pick channels, if channel not found in recording, skip
                     try:
                         eeg.pick(channels)
@@ -68,10 +65,11 @@ def process_data(data_dir, save_location, channels):
                     # if length of recording is less than 30s, skip
                     if eeg.times[-1] < 30:
                         continue
-
                     # create epochs of ~30s
                     epochs = mne.make_fixed_length_epochs(eeg, duration=30, preload=True)
-                    epochs_data = epochs.get_data()
+                    # resample to 200Hz
+                    epochs = epochs.resample(200)
+                    epochs_data = epochs.get_data(copy=False)
 
                     # read csv_bi file containing start and stop times of seizures
                     csvPath = os.path.join(montage, csv_bins[irec])
@@ -102,21 +100,28 @@ def process_data(data_dir, save_location, channels):
                     for i in range(num_intervals):
                         start_index = i * interval_size
                         end_index = (i + 1) * interval_size
+                        if labels[start_index:end_index].sum() == 0:
+                            no_of_non_seizures += 1
+                        elif labels[start_index:end_index].sum() > 0:
+                            no_of_seizures += 1
                         labels_data_list.append(labels[start_index:end_index])
 
 
                     for i in range(len(labels_data_list)):
-                        saveFilename = 'DataArray_Patient' + str(iPatient).zfill(3) + "_Session" + str(iSession).zfill(
+                        patient_name = patient.split('/')[-1].split("\\")[-1]
+                        saveFilename = 'DataArray_Patient_'+ str(patient_name)+ "_" + str(iPatient).zfill(3) + "_Session" + str(iSession).zfill(
                             3) + "_Rec" + str(irec).zfill(3) + "_Split" + str(i).zfill(3)
                         # save labels to labels folder
                         save(os.path.join(save_location, 'labels', saveFilename + ".labels"), labels_data_list[i])
                         # save epochs to edf folder
                         epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-epo.fif"), overwrite=True)
+    print('Number of seizures: ', no_of_seizures)
+    print('Number of non-seizures: ', no_of_non_seizures)
 
 
 # main
 if __name__ == '__main__':
-    data_dir = 'data/raw/dev'
-    save_location = 'data/processed/dev'
+    data_dir = 'C:/Users/FlorianHitzler/Documents/Uni/Bachelor Thesis/new_download/jku-ml-seminar23/eeg-research/individual/Hitzler/data/raw/dev'
+    save_location = 'C:/Users/FlorianHitzler/Documents/Uni/Bachelor Thesis/new_download/jku-ml-seminar23/eeg-research/individual/Hitzler/data/processed/dev'
     channels = ['EEG FP1-REF', 'EEG FP2-REF', 'EEG F3-REF', 'EEG F4-REF','EEG C3-REF', 'EEG C4-REF', 'EEG P3-REF', 'EEG P4-REF', 'EEG O1-REF', 'EEG O2-REF', 'EEG F7-REF', 'EEG F8-REF', 'EEG T3-REF', 'EEG T4-REF', 'EEG T5-REF', 'EEG T6-REF', 'EEG CZ-REF', 'EEG PZ-REF', 'EEG FZ-REF']
     process_data(data_dir, save_location, channels)

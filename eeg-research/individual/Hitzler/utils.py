@@ -28,7 +28,7 @@ def get_seizure_times(filepath):
     return start_stop_times
 
 
-def check_balance_of_dataset(dataset, subset=False):
+def check_balance_of_dataset(dataset, subset = False, type='train'):
     if not subset:
         labels = dataset.get_labels()
     else:
@@ -40,9 +40,11 @@ def check_balance_of_dataset(dataset, subset=False):
         label_list.append(label)
     # check balance of dataset
     label_list = np.array(label_list)
-    df = pd.DataFrame(label_list.max(axis=1), columns=['labels'])
+    label_list = label_list.max(axis=1)
+    df = pd.DataFrame(label_list, columns=['labels'])
     label_list = label_list.flatten()
     unique, counts = np.unique(label_list, return_counts=True)
+    print("stats for ", type)
     print("unique: ", unique)
     print("counts: ", counts)
     # print("df: ", df)
