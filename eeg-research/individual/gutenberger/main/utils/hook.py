@@ -34,4 +34,5 @@ class Model_Tracer():
             if self.do_save:
                 filename = "{}.pth".format(self.prefix)
                 torch.save(logs, os.path.join(self.root, filename))
+                print("Model saved.")
     ### End_Of_Class

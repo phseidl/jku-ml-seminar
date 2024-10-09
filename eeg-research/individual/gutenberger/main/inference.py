@@ -18,9 +18,52 @@ import time
 import sys
 import os
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-electrode = ['Fp1', 'Fp2', 'AF7', 'AF3', 'AF4', 'AF8', 'F7', 'F5', 'F3', 'F1', 'Fz', 'F2', 'F4', 'F6', 'F8', 'FT7', 'FC5', 'FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'FC6', 'FT8', 'T7', 'C5', 'C3', 'C1', 'Cz', 'C2', 'C4', 'C6', 'T8', 'TP7', 'CP5', 'CP3', 'CP1', 'CPz', 'CP2', 'CP4', 'CP6', 'TP8', 'P7', 'P5', 'P3', 'P1', 'Pz', 'P2', 'P4', 'P6', 'P8', 'PO7', 'POz', 'PO8', 'O1', 'O2']
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
+from xlstm import (
+    xLSTMBlockStack,
+    xLSTMBlockStackConfig,
+    mLSTMBlockConfig,
+    mLSTMLayerConfig,
+    sLSTMBlockConfig,
+    sLSTMLayerConfig,
+    FeedForwardConfig,
+)
+
+
+
+
+torch_dtype_map: dict[str, torch.dtype] = {
+    "float32": torch.float32,
+    "bfloat16": torch.bfloat16,
+    "float16": torch.float16,
+}
+xlstm_cfg = xLSTMBlockStackConfig(
+    mlstm_block=mLSTMBlockConfig(
+        mlstm=mLSTMLayerConfig(
+            conv1d_kernel_size=4, qkv_proj_blocksize=4, num_heads=3
+        )
+    ),
+    slstm_block=sLSTMBlockConfig(
+        slstm=sLSTMLayerConfig(
+            backend="vanilla",
+            num_heads=3,
+            conv1d_kernel_size=4,
+            bias_init="powerlaw_blockdependent",
+        ),
+        feedforward=FeedForwardConfig(proj_factor=1.3, act_fn="gelu"),
+    ),
+    context_length=512,
+    num_blocks=1,
+    embedding_dim=18,
+    slstm_at=[0],
+)
+
+MODEL_CLASS = 'xLSTM'
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#electrode = ['Fp1', 'Fp2', 'AF7', 'AF3', 'AF4', 'AF8', 'F7', 'F5', 'F3', 'F1', 'Fz', 'F2', 'F4', 'F6', 'F8', 'FT7', 'FC5', 'FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'FC6', 'FT8', 'T7', 'C5', 'C3', 'C1', 'Cz', 'C2', 'C4', 'C6', 'T8', 'TP7', 'CP5', 'CP3', 'CP1', 'CPz', 'CP2', 'CP4', 'CP6', 'TP8', 'P7', 'P5', 'P3', 'P1', 'Pz', 'P2', 'P4', 'P6', 'P8', 'PO7', 'POz', 'PO8', 'O1', 'O2']
+electrode = ['FP1', 'FP2', 'F3', 'C3', 'C4', 'P3', 'P4', 'O1', 'O2', 'F7', 'F8', 'T3', 'T4', 'T5', 'T6', 'FZ', 'CZ', 'PZ']
 """ pyplot waveform visualization """
 def viewARA(tstmps, data_colle, ref_i, electrode, titles=None, colors=None, alphas=None, ax=None):
     n_data = len(data_colle)
@@ -30,7 +73,7 @@ def viewARA(tstmps, data_colle, ref_i, electrode, titles=None, colors=None, alph
         cmap_ = plt.cm.get_cmap("tab20", n_data)
         colors = [rgb2hex(cmap_(di)) for di in range(n_data)]
 
-    picks_chs = ["Fp1", "T7", "Cz", "T8"]
+    picks_chs = ["FP1", "FP2", "F7", "T4", "O2"]
     picks = [electrode.index(c) for c in picks_chs]
     for di in range(n_data):
         data_colle[di] = data_colle[di][picks, :]
@@ -74,8 +117,11 @@ def ar_through_model(eeg_data, model, window_size, stride):
         with torch.no_grad():
             segment = np.expand_dims(segment, axis=0)
             data = np2TT(np.expand_dims(segment, axis=0))
+            if MODEL_CLASS == 'xLSTM':
+                data = data.permute(0,1,3,2).squeeze(0)  #ADDED
             data = data.to(device, dtype=torch.float)
             pred_segment = model(data)
+            pred_segment = pred_segment.permute(0,2,1)
             pred_segment = np.array(pred_segment.cpu()).astype(np.float32)
         noiseless_eeg[:, tstap: tstap + window_size] += pred_segment.squeeze() * hwin
         hcoef[tstap: tstap + window_size] += hwin
@@ -89,20 +135,20 @@ def ar_through_model(eeg_data, model, window_size, stride):
 if __name__ == "__main__":
     import argparse
 
-    # mat_path = 'sampleData/test.mat'
-    mat_path = 'sampleData/ERN_S02_exSam.mat'
-    mat_path = 'sampleData/Data_S18.mat'
+    test_data_path = 'sampleData/Data_S016_norm.mat'
+
+    model_path = 'logs/TUH/xLSTM/cleegn_tuh_xLSTM.pth'
     
-    model_path = 'configs/ern-allchan/bc-56chan(ep17).pth'
-    # model_path = 'sampleData/bc-12_0010.12_3040.4.pth'
-    
-    mat = loadmat(mat_path)
-    dt_polluted, dt_ref = mat["x_test"], mat["y_test"]
+    test_data = loadmat(test_data_path)
+    dt_polluted, dt_ref = test_data["x_test"], test_data["y_test"]
 
     ### temporary fixed mode
     state_path = os.path.join(model_path)
     state = torch.load(state_path, map_location="cpu")
-    model = CLEEGN(n_chan=56, fs=128.0, N_F=56).to(device)
+
+    xlstm_stack = xLSTMBlockStack(xlstm_cfg)
+    #model = CLEEGN(n_chan=x_train.size()[2], fs=SFREQ, N_F=x_train.size()[2]).to(device)
+    model = xlstm_stack.to(device)
     model.load_state_dict(state["state_dict"])
     #model.load_state_dict(torch.load(model_path))
     dt_cleegn = ar_through_model(
@@ -120,4 +166,6 @@ if __name__ == "__main__":
         [x_data, y_data, y_data, p_data], 1, electrode,
         titles=["Original", "", "Reference", "CLEEGN"], colors=["gray", "gray", "red", "blue"], alphas=[0.5, 0, 0.8, 0.8], ax=ax
     )
+    plt.savefig("test.pdf", format="pdf", bbox_inches="tight")
     plt.show()
+

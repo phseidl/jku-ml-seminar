@@ -1,10 +1,9 @@
-# Seminar and Master's Thesis Repository
+# Seminar Project and Master's Thesis Repository
+This is the official repository for the seminar project and master's thesis project supervised by phseidl, which encompasses two distinct groups: drug-discovery and EEG (Electroencephalography) research. This mono-repository is designed to facilitate coordination, teach version control, and collaboration between you all.
 
-Meeting: every Monday 14-15:00 SP13 S318 or via [zoom](https://jku.zoom.us/j/98032906314?pwd=ZFRQVDA5UVU1T0d6U0R2eGljQjF3dz09)
+Meetings: every Monday 15:30-16:00 SP13 S318 or via [zoom](https://jku.zoom.us/j/98032906314?pwd=ZFRQVDA5UVU1T0d6U0R2eGljQjF3dz09) (except holiday, or stated in the issues page)
 
 Voluntary ML4Drug-Discovery-Journal-Club of our Institute: (almost) every Tuesday 13-14:00 [zoom](https://jku.zoom.us/j/99088074385?pwd=bEdQN1dnaVNTUDFsdkRhSU9SZmZVQT09)
-
-This is the official repository for the seminar and master's thesis project, which encompasses two distinct groups: drug-discovery and EEG (Electroencephalography) research. This mono-repository is designed to facilitate coordination, version control, and collaboration between you all.
 
 Most important thing:
 your results should be reproducible and therefore well documented!
@@ -45,7 +44,8 @@ Within the projects a suggestion would be:
 -- 
 please all try to mentain a README for both projects
 
-each project should have a `setup.py` and a `env.yml`, I will provide a base, which you can modify.
+each individual project should have a `setup.py` and a `env.yml`, `README.md`, `PROGRESS.md`, I will provide a base, which you can modify.
+
 
 ## Getting Started
 
