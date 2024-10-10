@@ -76,13 +76,11 @@ def process_data(data_dir, save_location, channels):
                     # get seizure times from csv file
                     seizureTimes = get_seizure_times(csvPath)
 
-                    # create label vector, 1 = seizure, 0 = no seizure
+                    # create label vector, 1 = seizure, 0 = no seizure, length = number of epochs * window_size * sample_rate
                     labels = np.zeros(epochs_data.shape[0] * epochs_data.shape[2])
 
                     window_size = 30
                     sample_rate = 200
-
-
 
                     for i in range(len(seizureTimes)):
                         # get start and stop indices of seizure

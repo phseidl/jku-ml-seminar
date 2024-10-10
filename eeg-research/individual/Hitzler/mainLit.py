@@ -29,7 +29,6 @@ if __name__ == "__main__":
 
     train_dataset = EEGDataset(train["data_dir"], train["labels_dir"])
     valid_dataset = EEGDataset(valid["data_dir"], valid["labels_dir"])
-    # split the train set into two
     test_dataset = EEGDataset(test["data_dir"], test["labels_dir"])
 
     df, counts = check_balance_of_dataset(train_dataset)
