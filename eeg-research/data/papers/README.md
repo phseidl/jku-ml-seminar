@@ -1,7 +1,9 @@
 # Some links for papers
 -- add your name if you pick it ;) 
+
 WS24:
 - your name here [your paper link here](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
+  
 WS23:
 - Markus Gutenberger [CLEEGN: A Convolutional Neural Network for Plug-and-Play Automatic EEG Reconstruction](https://openreview.net/forum?id=O3NQgGoGu6)
 - Liza Shchasnovich [BIOT: Cross-data Biosignal Learning in the Wild](https://arxiv.org/abs/2305.10351)
