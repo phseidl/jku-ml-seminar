@@ -1,6 +1,15 @@
 from utils.build import create_dataset
 from utils.hook import Model_Tracer
 from utils.cleegn import CLEEGN
+from utils.seq2seq import Seq2Seq, Seq2SeqLSTM, LSTM
+from utils.seq2seq_attention import Seq2SeqWithAttention
+from utils.lstm_autoencoder import LSTMAutoencoder
+from utils.seq2seq_transformer import TransformerDenoiser
+from utils.Autoencoder_CNN import ConvAutoencoder, ConvAutoencoder_Compress
+from utils.Autoencoder_CNN_LSTM import LSTMConvAutoencoder, LSTMConvAutoencoder2, LSTMConvAutoencoder3, LSTMConvAutoencoder4
+from utils.Parallel_CNN_LSTM import Parallel_CNN_LSTM
+from utils.OneD_ResCNN import OneD_ResCNN
+from utils.IC_U_NET import IC_U_NET
 from utils.tv_epoch import train
 from utils.tv_epoch import val
 
@@ -19,6 +28,7 @@ import time
 import mne
 import sys
 import os
+import wandb
 from datetime import datetime
 import yaml
 from pathlib import Path
@@ -37,36 +47,70 @@ from xlstm import (
     FeedForwardConfig,
 )
 
-
+USE_WANDB = True
+ensemble_loss = True
 
 def model_select(model_class, model_cfg):
-    # model class : ['CLEEGN', 'xLSTM']
     if model_class == 'CLEEGN':
-        model = CLEEGN(n_chan=model_cfg['n_chan'], fs=SFREQ, N_F=model_cfg['N_F'])
+        model = CLEEGN(n_chan=model_cfg['n_chan'], fs=128, N_F=model_cfg['N_F'])
     elif model_class == 'xLSTM':
         xlstm_cfg = model_cfg['cfg']
         xlstm_cfg = OmegaConf.create(xlstm_cfg)
         xlstm_cfg = from_dict(data_class=xLSTMBlockStackConfig, data=OmegaConf.to_container(xlstm_cfg), config=DaciteConfig(strict=True))
         xlstm_stack = xLSTMBlockStack(xlstm_cfg)
         model = xlstm_stack
-
+    elif model_class == 'Seq2Seq':
+        model = Seq2Seq(input_dim=model_cfg['n_chan'], hidden_dim=model_cfg['hidden_dim'], output_dim=model_cfg['n_chan'], num_layers=model_cfg['num_layers'])
+    elif model_class == 'Seq2Seq_LSTM':
+        model = Seq2SeqLSTM(input_dim=model_cfg['n_chan'], hidden_dim=model_cfg['hidden_dim'], output_dim=model_cfg['n_chan'], num_layers=model_cfg['num_layers'])
+    elif model_class == 'LSTM':
+        model = LSTM(input_dim=model_cfg['n_chan'], hidden_dim=model_cfg['hidden_dim'], output_dim=model_cfg['n_chan'], num_layers=model_cfg['num_layers'])
+    elif model_class == 'Seq2Seq_Attention':
+        model = Seq2SeqWithAttention(input_dim=model_cfg['n_chan'], hidden_dim=model_cfg['hidden_dim'], output_dim=model_cfg['n_chan'], num_layers=model_cfg['num_layers'])
+    elif model_class == 'LSTM_Autoencoder':
+        model = LSTMAutoencoder(input_dim=model_cfg['n_chan'], hidden_dim=model_cfg['hidden_dim'], latent_dim=model_cfg['latent_dim'], output_dim=model_cfg['n_chan'], num_layers=model_cfg['num_layers'])
+    elif model_class == 'Transformer':
+        model = TransformerDenoiser(input_dim=model_cfg['n_chan'], embed_dim = model_cfg['embed_dim'], num_heads = model_cfg['num_heads'], num_layers = model_cfg['num_layers'], hidden_dim = model_cfg['hidden_dim'], dropout = model_cfg['dropout'], max_len = model_cfg['max_len'])
+    elif model_class == 'Autoencoder_CNN':
+        model = ConvAutoencoder(input_channels=model_cfg['n_chan'])
+    elif model_class == 'Autoencoder_CNN_Compress':
+        model = ConvAutoencoder_Compress(input_channels=model_cfg['n_chan'])
+    elif model_class == 'Autoencoder_CNN_LSTM':
+        model = LSTMConvAutoencoder(input_channels=model_cfg['n_chan'], sequence_length=model_cfg['sequence_length'], hidden_dim=model_cfg['hidden_dim'], latent_dim=model_cfg['latent_dim'])
+    elif model_class == 'Autoencoder_CNN_LSTM2':
+        model = LSTMConvAutoencoder2(input_dim=model_cfg['n_chan'], hidden_dim = model_cfg['n_chan'], num_layers = model_cfg['num_layers'])
+    elif model_class == 'Autoencoder_CNN_LSTM3':
+        model = LSTMConvAutoencoder3(input_dim=model_cfg['n_chan'], num_layers = model_cfg['num_layers'])
+    elif model_class == 'Autoencoder_CNN_LSTM4':
+        model = LSTMConvAutoencoder4(input_dim=model_cfg['n_chan'], num_layers = model_cfg['num_layers'])        
+    elif model_class == 'Parallel_CNN_LSTM':
+        model = Parallel_CNN_LSTM(lstm_model=LSTM(input_dim=model_cfg['n_chan'], hidden_dim=model_cfg['n_chan'], output_dim=model_cfg['n_chan'], num_layers=model_cfg['num_layers']), cnn_model=ConvAutoencoder(input_channels=model_cfg['n_chan']), n_chan=model_cfg['n_chan'], learn_concat=model_cfg['learn_concat'])
+    elif model_class == 'IC_U_Net':
+        #model = IC_U_NET(n_channels=model_cfg['n_chan'], bilinear=model_cfg['bilinear'])
+        model = IC_U_NET(input_channels=model_cfg['n_chan'])
+    elif model_class == 'OneD_Res_CNN':
+        model = OneD_ResCNN(seq_length=model_cfg['seq_length'], batch_size=model_cfg['batch_size'], n_chan=model_cfg['n_chan'])
     return model
 
 
-if __name__ == "__main__":
+def main_fct(config = None):
     import argparse
+    
+    if USE_WANDB:
+        wandb.init(config=config)
+        config = wandb.config
+        MODEL_CLASS = config.model_class
+    else:   
+        MODEL_CLASS = config['model_class']
 
-    MODEL_CLASS = 'xLSTM'
     DATASET = 'TUH'    # either 'TUH' or 'BCI'
 
     
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     if DATASET == 'BCI':
-        config_path = 'configs/BCI_KAGGLE/config.json'
-        train_anno_path = 'configs/BCI_KAGGLE/set_train.json'
-        valid_anno_path = 'configs/BCI_KAGGLE/set_valid.json'
+        config_path = 'configs/BCI_KAGGLE/config.yml'
+        model_config_path = 'configs/BCI_KAGGLE/model_config.yml'
     
     if DATASET == 'TUH':
         config_path = 'configs/TUH/config.yml'
@@ -130,34 +174,39 @@ if __name__ == "__main__":
     
     trainset = torch.utils.data.TensorDataset(x_train, y_train)
     tra_loader = torch.utils.data.DataLoader(
-        trainset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True
+        trainset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True, drop_last=True
     )
     validset = torch.utils.data.TensorDataset(x_valid, y_valid)
     val_loader = torch.utils.data.DataLoader(
-        validset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True
+        validset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True, drop_last=True
     )
 
 
     model = model_select(MODEL_CLASS, cfg_model).to(device)
 
+    total_params = sum(p.numel() for p in model.parameters())
+    print ('Total # of modelparameters: ', str(total_params))
+
     #summary(model, input_size=(BATCH_SIZE, 1, x_train.size()[2], x_train.size()[3]))
 
     ckpts = [
         Model_Tracer(monitor="loss", mode="min"),
-        Model_Tracer(monitor="val_loss", mode="min", do_save=True, root=SAVE_PATH, prefix=model_name + '_' + MODEL_CLASS + '_' + timestamp),
+        Model_Tracer(monitor="val_loss", mode="min", do_save=True, root=SAVE_PATH, prefix= MODEL_CLASS + '_' + timestamp),
     ]
     criteria = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=LR)
     #scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.8, last_epoch=-1)
 
     tra_time0 = time.time()
     loss_curve = {"epoch": [], "loss": [], "val_loss": []}
     
+    
     for epoch in range(NUM_EPOCHS):  
-        loss = train(tra_loader, model, criteria, optimizer)
+        loss = train(tra_loader, model, criteria, optimizer, MODEL_CLASS, ensemble_loss, USE_WANDB)
         
         """ validation """
-        val_loss = val(val_loader, model, criteria)
+        val_loss = val(val_loader, model, criteria, MODEL_CLASS)
         lr = optimizer.param_groups[-1]['lr']
         optimizer.step()
         #scheduler.step()
@@ -171,10 +220,35 @@ if __name__ == "__main__":
         )
         for ckpt in ckpts:
             ckpt.on_epoch_end(epoch + 1, state)
+        if USE_WANDB:
+            wandb.log({"epoch": epoch, "loss": loss, "val_loss": val_loss})
         loss_curve["epoch"].append(epoch + 1)
         loss_curve["loss"].append(loss)
         loss_curve["val_loss"].append(val_loss)
     ### End_Of_Train
     savemat(os.path.join(SAVE_PATH, "loss_curve.mat"), loss_curve)
-    #torch.save(model.state_dict(), os.path.join(SAVE_PATH, "model_save_" + timestamp + ".pth"))
-### End_Of_File
+
+if __name__ == "__main__":
+    if USE_WANDB:
+        wandb.login()
+
+        sweep_config = {
+                'method': 'grid',
+            }
+
+        parameters_dict = {
+        'model_class': {
+            'values': ['IC_U_Net'] #['LSTM', 'Autoencoder_CNN', 'xLSTM', 'Autoencoder_CNN_LSTM2', 'Autoencoder_CNN_LSTM3', 'Autoencoder_CNN_LSTM4', 'Parallel_CNN_LSTM', 'CLEEGN', 'IC_U_Net', 'OneD_Res_CNN']
+            },
+        }
+
+        sweep_config['parameters'] = parameters_dict
+
+        sweep_id = wandb.sweep(sweep_config, project="EEG_Denoising")
+
+        wandb.agent(sweep_id, main_fct)
+    else:
+        config = {
+        'model_class': 'IC_U_Net' #['LSTM', 'Autoencoder_CNN', 'xLSTM', 'Autoencoder_CNN_LSTM2', 'Autoencoder_CNN_LSTM3', 'Autoencoder_CNN_LSTM4', 'Parallel_CNN_LSTM', 'CLEEGN', 'IC_U_Net', 'OneD_Res_CNN']
+            }
+        main_fct(config)

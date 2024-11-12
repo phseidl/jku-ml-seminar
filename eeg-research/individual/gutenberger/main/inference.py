@@ -5,18 +5,53 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import from_numpy as np2TT
 from torchinfo import summary
-
+from omegaconf import OmegaConf
 from matplotlib.colors import rgb2hex
 import matplotlib.pyplot as plt
 from scipy.io import loadmat
 from scipy.io import savemat
 from scipy import signal
+from dacite import from_dict
+from dacite import Config as DaciteConfig
 import numpy as np
 import math
 import json
 import time
 import sys
 import os
+import yaml
+from pathlib import Path
+
+from utils.seq2seq import Seq2Seq, Seq2SeqLSTM, LSTM
+from utils.seq2seq_attention import Seq2SeqWithAttention
+from utils.lstm_autoencoder import LSTMAutoencoder
+from main import model_select
+
+
+MODEL_CLASS = 'IC_U_Net'
+DATASET = 'TUH'
+MODEL_FILE_NAME = 'IC_U_Net_Nov11_15-17-30.pth'
+
+
+if DATASET == 'BCI':
+    config_path = 'configs/BCI_KAGGLE/config.yml'
+    model_config_path = 'configs/BCI_KAGGLE/model_config.yml'
+    electrode = ['Fp1', 'Fp2', 'AF7', 'AF3', 'AF4', 'AF8', 'F7', 'F5', 'F3', 'F1', 'Fz', 'F2', 'F4', 'F6', 'F8', 'FT7', 'FC5', 'FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'FC6', 'FT8', 'T7', 'C5', 'C3', 'C1', 'Cz', 'C2', 'C4', 'C6', 'T8', 'TP7', 'CP5', 'CP3', 'CP1', 'CPz', 'CP2', 'CP4', 'CP6', 'TP8', 'P7', 'P5', 'P3', 'P1', 'Pz', 'P2', 'P4', 'P6', 'P8', 'PO7', 'POz', 'PO8', 'O1', 'O2']
+    picks_chs = ["Fp1", "Fp2", "F7", "T7", "O2"]
+    TEST_DATA_PATH = 'sampleData\Data_S14.mat'
+    
+if DATASET == 'TUH':
+    config_path = 'configs/TUH/config.yml'
+    model_config_path = 'configs/TUH/model_config.yml'
+    electrode = ['FP1', 'FP2', 'F3', 'C3', 'C4', 'P3', 'P4', 'O1', 'O2', 'F7', 'F8', 'T3', 'T4', 'T5', 'T6', 'FZ', 'CZ', 'PZ']
+    picks_chs = ["FP1", "FP2", "F7", "T4", "O2"]
+    TEST_DATA_PATH = 'data\TUH_TUSZ\TUH_dataset_inference\Data_S015_norm.mat'
+
+
+cfg_model = yaml.safe_load(Path(model_config_path).read_text())[MODEL_CLASS]
+cfg_dataset = yaml.safe_load(Path(config_path).read_text())['Dataset']
+SFREQ      = cfg_dataset["sfreq"]
+
 
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
@@ -47,7 +82,7 @@ xlstm_cfg = xLSTMBlockStackConfig(
     slstm_block=sLSTMBlockConfig(
         slstm=sLSTMLayerConfig(
             backend="vanilla",
-            num_heads=3,
+            num_heads=1,
             conv1d_kernel_size=4,
             bias_init="powerlaw_blockdependent",
         ),
@@ -59,13 +94,13 @@ xlstm_cfg = xLSTMBlockStackConfig(
     slstm_at=[0],
 )
 
-MODEL_CLASS = 'xLSTM'
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#electrode = ['Fp1', 'Fp2', 'AF7', 'AF3', 'AF4', 'AF8', 'F7', 'F5', 'F3', 'F1', 'Fz', 'F2', 'F4', 'F6', 'F8', 'FT7', 'FC5', 'FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'FC6', 'FT8', 'T7', 'C5', 'C3', 'C1', 'Cz', 'C2', 'C4', 'C6', 'T8', 'TP7', 'CP5', 'CP3', 'CP1', 'CPz', 'CP2', 'CP4', 'CP6', 'TP8', 'P7', 'P5', 'P3', 'P1', 'Pz', 'P2', 'P4', 'P6', 'P8', 'PO7', 'POz', 'PO8', 'O1', 'O2']
-electrode = ['FP1', 'FP2', 'F3', 'C3', 'C4', 'P3', 'P4', 'O1', 'O2', 'F7', 'F8', 'T3', 'T4', 'T5', 'T6', 'FZ', 'CZ', 'PZ']
+
+
 """ pyplot waveform visualization """
-def viewARA(tstmps, data_colle, ref_i, electrode, titles=None, colors=None, alphas=None, ax=None):
+def viewARA(tstmps, data_colle, ref_i, electrode, titles=None, colors=None, alphas=None, ax=None, picks_channel=None):
     n_data = len(data_colle)
     titles = ["" for di in range(n_data)] if titles is None else titles
     alphas = [0.5 for di in range(n_data)] if alphas is None else alphas
@@ -73,7 +108,7 @@ def viewARA(tstmps, data_colle, ref_i, electrode, titles=None, colors=None, alph
         cmap_ = plt.cm.get_cmap("tab20", n_data)
         colors = [rgb2hex(cmap_(di)) for di in range(n_data)]
 
-    picks_chs = ["FP1", "FP2", "F7", "T4", "O2"]
+    
     picks = [electrode.index(c) for c in picks_chs]
     for di in range(n_data):
         data_colle[di] = data_colle[di][picks, :]
@@ -106,7 +141,7 @@ def ar_through_model(eeg_data, model, window_size, stride):
     noiseless_eeg = np.zeros(eeg_data.shape, dtype=np.float32)
     hcoef = np.zeros(eeg_data.shape[1], dtype=np.float32)
 
-    hwin = signal.hann(window_size) + 1e-9
+    hwin = signal.windows.hann(window_size) + 1e-9
     for i in range(0, noiseless_eeg.shape[1], stride):
         tstap, LAST_FRAME = i, False
         segment = eeg_data[:, tstap: tstap + window_size]
@@ -121,8 +156,9 @@ def ar_through_model(eeg_data, model, window_size, stride):
                 data = data.permute(0,1,3,2).squeeze(0)  #ADDED
             data = data.to(device, dtype=torch.float)
             pred_segment = model(data)
-            pred_segment = pred_segment.permute(0,2,1)
-            pred_segment = np.array(pred_segment.cpu()).astype(np.float32)
+            if MODEL_CLASS == 'xLSTM':
+                pred_segment = pred_segment.permute(0,2,1)
+            pred_segment = np.array(pred_segment.cpu()).astype(np.float32)   #pred_segment [1, n_chan, seq_length]
         noiseless_eeg[:, tstap: tstap + window_size] += pred_segment.squeeze() * hwin
         hcoef[tstap: tstap + window_size] += hwin
 
@@ -132,14 +168,14 @@ def ar_through_model(eeg_data, model, window_size, stride):
 
     return noiseless_eeg
 
+
+
 if __name__ == "__main__":
     import argparse
 
-    test_data_path = 'sampleData/Data_S016_norm.mat'
-
-    model_path = 'logs/TUH/xLSTM/cleegn_tuh_xLSTM.pth'
+    model_path = os.path.join(os.path.abspath(os.getcwd()), 'logs', DATASET, MODEL_CLASS, MODEL_FILE_NAME)
     
-    test_data = loadmat(test_data_path)
+    test_data = loadmat(TEST_DATA_PATH)
     dt_polluted, dt_ref = test_data["x_test"], test_data["y_test"]
 
     ### temporary fixed mode
@@ -148,14 +184,15 @@ if __name__ == "__main__":
 
     xlstm_stack = xLSTMBlockStack(xlstm_cfg)
     #model = CLEEGN(n_chan=x_train.size()[2], fs=SFREQ, N_F=x_train.size()[2]).to(device)
-    model = xlstm_stack.to(device)
+    #model = xlstm_stack.to(device)
+    model = model_select(MODEL_CLASS, cfg_model)
     model.load_state_dict(state["state_dict"])
     #model.load_state_dict(torch.load(model_path))
     dt_cleegn = ar_through_model(
         dt_polluted, model, math.ceil(4.0 * 128.0), math.ceil(1 * 128.0)
     )
     
-    start = 1500
+    start = 6000
     x_min, x_max = start, start + 500
     x_data = dt_polluted[:, x_min: x_max]
     y_data = dt_ref[:, x_min: x_max]
@@ -164,8 +201,8 @@ if __name__ == "__main__":
     viewARA(
         np.linspace(0, math.ceil(x_data.shape[-1] / 128.0), x_data.shape[-1]),
         [x_data, y_data, y_data, p_data], 1, electrode,
-        titles=["Original", "", "Reference", "CLEEGN"], colors=["gray", "gray", "red", "blue"], alphas=[0.5, 0, 0.8, 0.8], ax=ax
+        titles=["Original", "", "Reference", MODEL_CLASS], colors=["gray", "gray", "red", "blue"], alphas=[0.5, 0, 0.8, 0.8], ax=ax,
+        picks_channel = picks_chs
     )
     plt.savefig("test.pdf", format="pdf", bbox_inches="tight")
     plt.show()
-
