@@ -1,8 +1,8 @@
 
-model_name: cleegn_tuh
+model_name: model_tuh
 save_path: null
 
-epochs: 2
+epochs: 100
 
 Dataset:
   shuffle: true
