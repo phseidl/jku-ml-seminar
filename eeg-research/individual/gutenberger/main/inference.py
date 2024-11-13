@@ -26,11 +26,15 @@ from utils.seq2seq import Seq2Seq, Seq2SeqLSTM, LSTM
 from utils.seq2seq_attention import Seq2SeqWithAttention
 from utils.lstm_autoencoder import LSTMAutoencoder
 from main import model_select
+from utils.build import get_rdm_EEG_segment_DenoiseNet
 
 
-MODEL_CLASS = 'IC_U_Net'
-DATASET = 'TUH'
-MODEL_FILE_NAME = 'IC_U_Net_Nov11_15-17-30.pth'
+MODEL_CLASS = 'OneD_Res_CNN'
+DATASET = 'DenoiseNet'
+MODEL_FILE_NAME = 'OneD_Res_CNN_Nov13_13-35-41.pth'
+artifact_type = 'EOG'
+snr_synthetic_testData = 4 #in dezibel
+plt_interval = [0, 512]
 
 
 if DATASET == 'BCI':
@@ -40,12 +44,18 @@ if DATASET == 'BCI':
     picks_chs = ["Fp1", "Fp2", "F7", "T7", "O2"]
     TEST_DATA_PATH = 'sampleData\Data_S14.mat'
     
-if DATASET == 'TUH':
+elif DATASET == 'TUH':
     config_path = 'configs/TUH/config.yml'
     model_config_path = 'configs/TUH/model_config.yml'
     electrode = ['FP1', 'FP2', 'F3', 'C3', 'C4', 'P3', 'P4', 'O1', 'O2', 'F7', 'F8', 'T3', 'T4', 'T5', 'T6', 'FZ', 'CZ', 'PZ']
     picks_chs = ["FP1", "FP2", "F7", "T4", "O2"]
     TEST_DATA_PATH = 'data\TUH_TUSZ\TUH_dataset_inference\Data_S015_norm.mat'
+
+elif DATASET == 'DenoiseNet':
+    config_path = 'configs/EEG_DenoiseNet/config.yml'
+    model_config_path = 'configs/EEG_DenoiseNet/model_config.yml'
+    electrode = ['ch1']
+    picks_chs = ['ch1']
 
 
 cfg_model = yaml.safe_load(Path(model_config_path).read_text())[MODEL_CLASS]
@@ -168,6 +178,18 @@ def ar_through_model(eeg_data, model, window_size, stride):
 
     return noiseless_eeg
 
+def calc_SNR(clean_data, noisy_data, inDezibel = True):
+    # clean data: reference data
+    # noisy data: data to measure SNR on, e.g. output of the model
+    n_chan = clean_data.shape[0]
+
+    if inDezibel:
+        return 1/n_chan * np.sum(10 * np.log10(np.linalg.norm(clean_data, axis = 1)/np.linalg.norm(clean_data-noisy_data, axis = 1)))
+    else:
+        return 1/n_chan * np.sum(np.linalg.norm(clean_data, axis = 1)**2/np.linalg.norm(clean_data-noisy_data, axis = 1)**2)
+
+def calc_MSE(x, y):
+    return 1/x.shape[0] * np.sum(1/x.shape[1] * np.linalg.norm(x - y, axis = 1)**2)
 
 
 if __name__ == "__main__":
@@ -175,28 +197,45 @@ if __name__ == "__main__":
 
     model_path = os.path.join(os.path.abspath(os.getcwd()), 'logs', DATASET, MODEL_CLASS, MODEL_FILE_NAME)
     
-    test_data = loadmat(TEST_DATA_PATH)
-    dt_polluted, dt_ref = test_data["x_test"], test_data["y_test"]
+    if DATASET == 'TUH' or DATASET == 'BCI':
+        test_data = loadmat(TEST_DATA_PATH)
+        noisy_data, reference_data = test_data["x_test"], test_data["y_test"]
+    elif DATASET == 'DenoiseNet':
+        noisy_data, reference_data = get_rdm_EEG_segment_DenoiseNet(cfg_dataset, artifact_type, snr_synthetic_testData)
+        percentile_95 = np.quantile(np.abs(noisy_data.squeeze()), 0.95) 
+        noisy_data = noisy_data/percentile_95 
+        reference_data = reference_data/percentile_95
 
-    ### temporary fixed mode
+
     state_path = os.path.join(model_path)
     state = torch.load(state_path, map_location="cpu")
 
-    xlstm_stack = xLSTMBlockStack(xlstm_cfg)
-    #model = CLEEGN(n_chan=x_train.size()[2], fs=SFREQ, N_F=x_train.size()[2]).to(device)
-    #model = xlstm_stack.to(device)
+    #xlstm_stack = xLSTMBlockStack(xlstm_cfg)
+
     model = model_select(MODEL_CLASS, cfg_model)
     model.load_state_dict(state["state_dict"])
-    #model.load_state_dict(torch.load(model_path))
-    dt_cleegn = ar_through_model(
-        dt_polluted, model, math.ceil(4.0 * 128.0), math.ceil(1 * 128.0)
+
+    reconstructed_data = ar_through_model(
+        noisy_data, model, math.ceil(4.0 * 128.0), math.ceil(1 * 128.0)
     )
     
-    start = 6000
-    x_min, x_max = start, start + 500
-    x_data = dt_polluted[:, x_min: x_max]
-    y_data = dt_ref[:, x_min: x_max]
-    p_data = dt_cleegn[:, x_min: x_max]
+
+
+    start = plt_interval[0]
+    x_min, x_max = start, start + plt_interval[1]
+    x_data = noisy_data[:, x_min: x_max]
+    y_data = reference_data[:, x_min: x_max]
+    p_data = reconstructed_data[:, x_min: x_max]
+
+    #TODO SNR, MSE berechnen und printen
+    snr = calc_SNR(y_data, p_data, inDezibel=False)
+    snr_dB = calc_SNR(y_data, p_data, inDezibel=True)
+    mse = calc_MSE(y_data, p_data)
+    
+    print('Data points of segment: ' + str(p_data.shape[1]))
+    print(f'MSE: {mse:.5f}')
+    print(f'SNR: {snr_dB:.2f}dB (or {snr:.2f})')
+
     fig, ax = plt.subplots(1, 1, figsize=(16, 9))
     viewARA(
         np.linspace(0, math.ceil(x_data.shape[-1] / 128.0), x_data.shape[-1]),
@@ -204,5 +243,5 @@ if __name__ == "__main__":
         titles=["Original", "", "Reference", MODEL_CLASS], colors=["gray", "gray", "red", "blue"], alphas=[0.5, 0, 0.8, 0.8], ax=ax,
         picks_channel = picks_chs
     )
-    plt.savefig("test.pdf", format="pdf", bbox_inches="tight")
+    plt.savefig("inference.pdf", format="pdf", bbox_inches="tight")
     plt.show()

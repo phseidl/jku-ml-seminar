@@ -1,4 +1,4 @@
-from utils.build import create_dataset
+from utils.build import create_dataset, create_EEG_DenoiseNet_dataset
 from utils.hook import Model_Tracer
 from utils.cleegn import CLEEGN
 from utils.seq2seq import Seq2Seq, Seq2SeqLSTM, LSTM
@@ -12,6 +12,7 @@ from utils.OneD_ResCNN import OneD_ResCNN
 from utils.IC_U_NET import IC_U_NET
 from utils.tv_epoch import train
 from utils.tv_epoch import val
+from sklearn.model_selection import train_test_split
 
 import torch
 import torch.nn as nn
@@ -47,8 +48,8 @@ from xlstm import (
     FeedForwardConfig,
 )
 
-USE_WANDB = True
-ensemble_loss = True
+USE_WANDB = False
+
 
 def model_select(model_class, model_cfg):
     if model_class == 'CLEEGN':
@@ -103,8 +104,10 @@ def main_fct(config = None):
     else:   
         MODEL_CLASS = config['model_class']
 
-    DATASET = 'TUH'    # either 'TUH' or 'BCI'
-
+    DATASET = 'BCI'    # either 'TUH' or 'BCI' or 'DenoiseNet'
+    artifact_type = 'EOG'
+    ensemble_loss = False
+    
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -112,9 +115,13 @@ def main_fct(config = None):
         config_path = 'configs/BCI_KAGGLE/config.yml'
         model_config_path = 'configs/BCI_KAGGLE/model_config.yml'
     
-    if DATASET == 'TUH':
+    elif DATASET == 'TUH':
         config_path = 'configs/TUH/config.yml'
         model_config_path = 'configs/TUH/model_config.yml'
+
+    elif DATASET == 'DenoiseNet':
+        config_path = 'configs/EEG_DenoiseNet/config.yml'
+        model_config_path = 'configs/EEG_DenoiseNet/model_config.yml'
     
 
     #cfg = read_json(config_path)
@@ -126,9 +133,11 @@ def main_fct(config = None):
     cfg_model = yaml.safe_load(Path(model_config_path).read_text())[MODEL_CLASS]
 
     SFREQ      = cfg_dataset["sfreq"]
+    normalize  = cfg_dataset["normalize"]
     NUM_EPOCHS = cfg_general['epochs']
     BATCH_SIZE = cfg_model['batch_size']
     LR         = cfg_model["learning_rate"]
+    
     
 
     # Save path
@@ -145,25 +154,39 @@ def main_fct(config = None):
 
     timestamp = datetime.now().strftime("%b%d_%H-%M-%S")
 
-    # Dataset
-    x_train, y_train = create_dataset(
-        os.path.join(cfg_dataset["x_basepath"], cfg_dataset["x_fpath"]),
-        os.path.join(cfg_dataset["y_basepath"], cfg_dataset["y_fpath"]),
-        cfg_dataset["subjects_train"], tmin=cfg_dataset["tmin"], tmax=cfg_dataset["tmax"],
-        ch_names=cfg_dataset["ch_names"], win_size=cfg_dataset["window_size"], stride=cfg_dataset["stride"]
-    )
+
+
+    ################ Load Dataset ######################
+    if DATASET == 'TUH' or DATASET == 'BCI':
+        x_train, y_train = create_dataset(
+            os.path.join(cfg_dataset["x_basepath"], cfg_dataset["x_fpath"]),
+            os.path.join(cfg_dataset["y_basepath"], cfg_dataset["y_fpath"]),
+            cfg_dataset["subjects_train"], tmin=cfg_dataset["tmin"], tmax=cfg_dataset["tmax"],
+            ch_names=cfg_dataset["ch_names"], win_size=cfg_dataset["window_size"], stride=cfg_dataset["stride"]
+        )
+    elif DATASET == 'DenoiseNet':
+        x, y = create_EEG_DenoiseNet_dataset(cfg_dataset, artifact_type, debug = True)
+        x_train, x_valid, y_train, y_valid = train_test_split(x, y, test_size=0.2, random_state=0, shuffle=True)
+        x_train = np.expand_dims(x_train,1)
+        y_train = np.expand_dims(y_train,1)
+        x_valid = np.expand_dims(x_valid,1)
+        y_valid = np.expand_dims(y_valid,1)
+
+    #x_train.shape: [Nr of segments, channel nr, sequence length]
     x_train = np2TT(np.expand_dims(x_train, axis=1))
     y_train = np2TT(np.expand_dims(y_train, axis=1))
 
     if MODEL_CLASS == 'xLSTM':
         x_train, y_train = x_train.permute(0,1,3,2).squeeze(), y_train.permute(0,1,3,2).squeeze() 
-    
-    x_valid, y_valid = create_dataset(
-        os.path.join(cfg_dataset["x_basepath"], cfg_dataset["x_fpath"]),
-        os.path.join(cfg_dataset["y_basepath"], cfg_dataset["y_fpath"]),
-        cfg_dataset["subjects_val"], tmin=cfg_dataset["tmin"], tmax=cfg_dataset["tmax"],
-        ch_names=cfg_dataset["ch_names"], win_size=cfg_dataset["window_size"], stride=cfg_dataset["stride"]
-    )
+
+    if DATASET == 'TUH' or DATASET == 'BCI':
+        x_valid, y_valid = create_dataset(
+            os.path.join(cfg_dataset["x_basepath"], cfg_dataset["x_fpath"]),
+            os.path.join(cfg_dataset["y_basepath"], cfg_dataset["y_fpath"]),
+            cfg_dataset["subjects_val"], tmin=cfg_dataset["tmin"], tmax=cfg_dataset["tmax"],
+            ch_names=cfg_dataset["ch_names"], win_size=cfg_dataset["window_size"], stride=cfg_dataset["stride"]
+        )
+
     x_valid = np2TT(np.expand_dims(x_valid, axis=1))
     y_valid = np2TT(np.expand_dims(y_valid, axis=1))
 
@@ -181,6 +204,7 @@ def main_fct(config = None):
         validset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True, drop_last=True
     )
 
+    ###################################################################
 
     model = model_select(MODEL_CLASS, cfg_model).to(device)
 
@@ -203,10 +227,10 @@ def main_fct(config = None):
     
     
     for epoch in range(NUM_EPOCHS):  
-        loss = train(tra_loader, model, criteria, optimizer, MODEL_CLASS, ensemble_loss, USE_WANDB)
+        loss = train(tra_loader, model, criteria, optimizer, MODEL_CLASS, normalize, ensemble_loss, USE_WANDB)
         
         """ validation """
-        val_loss = val(val_loader, model, criteria, MODEL_CLASS)
+        val_loss = val(val_loader, model, criteria, MODEL_CLASS, normalize)
         lr = optimizer.param_groups[-1]['lr']
         optimizer.step()
         #scheduler.step()
