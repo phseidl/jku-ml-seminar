@@ -1,67 +1,84 @@
 import os
 import random
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 
 class EmbeddingDataset(Dataset):
-    def __init__(self, data_path, data_length=None, shuffle=False, unconditional=False):
+    def __init__(self, data_path, data_length=None, shuffle=False, unconditional=True):
         """
         Args:
-            data_path (list): A list of tuples/lists: [(mol_embed_path, assay_embed_path), ...]
-                              Each entry should point to .npy files for molecule and assay embeddings.
+            data_path (list): 
+                If unconditional=True, a list of file paths to molecule embeddings only.
+                If unconditional=False, a list of tuples [(mol_embed_path, assay_embed_path), ...].
             data_length (int, optional): If not None, truncate dataset length to this number.
             shuffle (bool): Whether to shuffle the dataset after loading.
             unconditional (bool): If True, the dataset returns only molecule embeddings (assay=None).
         """
         self.unconditional = unconditional
 
-        # Load and concatenate all embeddings
-        mol_embeddings_list = []
-        assay_embeddings_list = []
-        for mol_path, assay_path in data_path:
-            if not (os.path.isfile(mol_path) and os.path.isfile(assay_path)):
-                raise FileNotFoundError(f"Could not find molecule or assay file: {mol_path}, {assay_path}")
+        if self.unconditional:
+            # data_path is a list of molecule embedding files
+            mol_embeddings_list = []
+            for mol_path in data_path:
+                if not os.path.isfile(mol_path):
+                    raise FileNotFoundError(f"Could not find molecule file: {mol_path}")
+                mol_emb = np.load(mol_path)
+                mol_embeddings_list.append(mol_emb)
+            self.mol_embeddings = np.concatenate(mol_embeddings_list, axis=0)
+            self.assay_embeddings = None
+        else:
+            # data_path is a list of (molecule, assay) tuples
+            mol_embeddings_list = []
+            assay_embeddings_list = []
+            for mol_path, assay_path in data_path:
+                if not (os.path.isfile(mol_path) and os.path.isfile(assay_path)):
+                    raise FileNotFoundError(f"Could not find molecule or assay file: {mol_path}, {assay_path}")
 
-            mol_emb = np.load(mol_path)
-            assay_emb = np.load(assay_path)
+                mol_emb = np.load(mol_path)
+                assay_emb = np.load(assay_path)
 
-            if mol_emb.shape[0] != assay_emb.shape[0]:
-                raise ValueError(f"Molecule and assay embeddings must have the same length. "
-                                 f"Found {mol_emb.shape[0]} vs {assay_emb.shape[0]} for files {mol_path}, {assay_path}")
+                if mol_emb.shape[0] != assay_emb.shape[0]:
+                    raise ValueError(
+                        f"Molecule and assay embeddings must have the same length. "
+                        f"Found {mol_emb.shape[0]} vs {assay_emb.shape[0]} for files {mol_path}, {assay_path}"
+                    )
 
-            mol_embeddings_list.append(mol_emb)
-            assay_embeddings_list.append(assay_emb)
+                mol_embeddings_list.append(mol_emb)
+                assay_embeddings_list.append(assay_emb)
 
-        self.mol_embeddings = np.concatenate(mol_embeddings_list, axis=0)
-        self.assay_embeddings = np.concatenate(assay_embeddings_list, axis=0)
+            self.mol_embeddings = np.concatenate(mol_embeddings_list, axis=0)
+            self.assay_embeddings = np.concatenate(assay_embeddings_list, axis=0)
 
         # Truncate if data_length is specified
         if data_length is not None:
             self.mol_embeddings = self.mol_embeddings[:data_length]
-            self.assay_embeddings = self.assay_embeddings[:data_length]
+            if self.assay_embeddings is not None:
+                self.assay_embeddings = self.assay_embeddings[:data_length]
 
         # Optionally shuffle
         if shuffle:
             idx = np.arange(len(self.mol_embeddings))
             np.random.shuffle(idx)
             self.mol_embeddings = self.mol_embeddings[idx]
-            self.assay_embeddings = self.assay_embeddings[idx]
+            if self.assay_embeddings is not None:
+                self.assay_embeddings = self.assay_embeddings[idx]
 
-        # Convert to float32 for PyTorch compatibility (if needed)
-        # (You can skip this if your embeddings are already float32)
+        # Convert to float32 for PyTorch compatibility if needed
         self.mol_embeddings = self.mol_embeddings.astype(np.float32)
-        self.assay_embeddings = self.assay_embeddings.astype(np.float32)
+        if self.assay_embeddings is not None:
+            self.assay_embeddings = self.assay_embeddings.astype(np.float32)
 
     def __len__(self):
         return self.mol_embeddings.shape[0]
 
     def __getitem__(self, index):
-        mol_embed = self.mol_embeddings[index]
+        mol_embed = torch.from_numpy(self.mol_embeddings[index]).unsqueeze(0)  # Shape: [1, 768]
         if self.unconditional:
-            # Return molecule embeddings only
-            return mol_embed, None
+            assay_embed = torch.zeros((1, 1), dtype=torch.float32)  # Shape: [1, 1]
+            return mol_embed, assay_embed
         else:
-            assay_embed = self.assay_embeddings[index]
+            assay_embed = torch.from_numpy(self.assay_embeddings[index]).unsqueeze(0)  # Shape: [1, assay_dim]
             return mol_embed, assay_embed
 
 

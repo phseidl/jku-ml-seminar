@@ -16,3 +16,4 @@ Run `conda env create -f requirements.yaml` and it will generate a conda environ
 ## Acknowledgement
 * The code for the latent Diffusion part is based on & modified from the official code of [LDMol](https://github.com/jinhojsk515/ldmol).
 * The code and models for the encoder part are based on & modified from the official code of [CLAMP](https://github.com/ml-jku/clamp).
+* The code for the tokenization scheme is based on & modified from the official code of [S4 for De Novo Drug Design](https://github.com/molML/s4-for-de-novo-drug-design)

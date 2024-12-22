@@ -180,6 +180,10 @@ class DiTBlock(nn.Module):
         if cross_attn > 0:
             self.norm3 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
             self.cross_attn = CrossAttention(hidden_size, cross_attn, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        else:
+            self.norm3 = None
+            self.cross_attn = None
+            
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         approx_gelu = lambda: nn.GELU(approximate="tanh")
@@ -196,7 +200,7 @@ class DiTBlock(nn.Module):
         else:
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(self.factor, dim=1)
         x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa))
-        if self.factor == 9:
+        if self.factor == 9 and self.cross_attn is not None:
             x = x + gate_mca.unsqueeze(1) * self.cross_attn(modulate(self.norm3(x), shift_mca, scale_mca), y, pad_mask)
         x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
@@ -231,7 +235,7 @@ class DiT(nn.Module):
     def __init__(
             self,
             input_size=32,
-            patch_size=2,
+            patch_size=1,
             in_channels=4,
             hidden_size=1152,
             depth=28,
@@ -242,6 +246,15 @@ class DiT(nn.Module):
             learn_sigma=True, cross_attn=0, condition_dim=4096
     ):
         super().__init__()
+
+        # Print statements for debugging unconditional setup
+        print(f"Initializing DiT model with:")
+        print(f"  cross_attn={cross_attn}, condition_dim={condition_dim}")
+        if cross_attn == 0 and condition_dim == 0:
+            print("  Model is set for unconditional training.")
+        else:
+            print("  Model is set for conditional training.")
+
         self.learn_sigma = learn_sigma
         self.in_channels = in_channels
         self.out_channels = in_channels * 2 if learn_sigma else in_channels
@@ -253,7 +266,10 @@ class DiT(nn.Module):
         self.x_embedder = nn.Linear(in_channels, hidden_size)
         self.t_embedder = TimestepEmbedder(hidden_size)
         self.y_embedder = LabelEmbedder(num_classes, hidden_size, class_dropout_prob)
-        self.y_linear = nn.Linear(condition_dim, cross_attn)
+        if cross_attn > 0:
+            self.y_linear = nn.Linear(condition_dim, cross_attn)
+        else:
+            self.y_linear = None
         num_patches = input_size  # self.x_embedder.num_patches
         # Will use fixed sin-cos embedding:
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, hidden_size), requires_grad=False)
@@ -268,6 +284,10 @@ class DiT(nn.Module):
         # Initialize transformer layers:
         def _basic_init(module):
             if isinstance(module, nn.Linear):
+                if module.weight.data.numel() == 0:
+                    print(f"Warning: Found a Linear layer with empty weight tensor: {module}")
+                #else:
+                    #print(f"Initializing Linear layer with shape: {module.weight.data.shape}")
                 torch.nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0)
@@ -277,10 +297,6 @@ class DiT(nn.Module):
         # Initialize (and freeze) pos_embed by sin-cos embedding:
         pos_embed = get_1d_sincos_pos_embed_from_grid(self.pos_embed.shape[-1], np.arange(self.input_size))
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
-
-        # OLD CODE
-        # pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], self.input_size)  # int(self.x_embedder.num_patches ** 0.5)
-        # self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
         # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
         # w = self.x_embedder.proj.weight.data
@@ -327,15 +343,23 @@ class DiT(nn.Module):
         t: (N,) tensor of diffusion timesteps
         y: (N,) tensor of class labels
         """
-        x = x.squeeze(-1).permute((0, 2, 1))
+        #print("shape of x:", x.size())
+        # x is initially (N, 1, 768, 1)
+        x = x.squeeze(1).squeeze(-1)  # (N, 768)
+        #print("shape of x:", x.size(), " == (N, 768)")
+        x = x.unsqueeze(-1)           # (N, 768, 1)
+        #print("shape of x:", x.size(), "== (N, 768, 1)")
+
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(t)  # (N, D)
         # y = self.y_embedder(y, self.training)    # (N, D)
-        if y is not None:   y = self.y_linear(y)
+        if y is not None and self.y_linear is not None:
+            y = self.y_linear(y)
+
         # c = t + y                                # (N, D)
-        c = t  # (N, D)
+        c = t  # (N, D) -> Unconditional training only uses timestep embeddings
         for block in self.blocks:
-            x = block(x, c, y, pad_mask)  # (N, T, D)
+            x = block(x, c, y, pad_mask)  # (N, T, D) = (N, sequence_length, hidden_size)
         x = self.final_layer(x, c).permute((0, 2, 1)).unsqueeze(-1)  # (N, T, patch_size ** 2 * out_channels)
         # x = self.unpatchify(x)                   # (N, out_channels, H, W)
         return x

@@ -1,0 +1,6 @@
+decoder_layers: 2
+embedding_dim: 768
+hidden_dim: 256
+lr: 0.001
+pad_idx: 373
+vocab_size: 376
