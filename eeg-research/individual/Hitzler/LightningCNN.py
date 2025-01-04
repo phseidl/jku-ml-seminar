@@ -1,4 +1,5 @@
 import math
+
 import lightning as L
 import numpy as np
 import torch
@@ -6,6 +7,8 @@ import torchmetrics
 from torch import optim, nn
 
 from cosine_annealing_with_warmupSingle import CosineAnnealingWarmUpSingle
+from torch.optim import lr_scheduler
+
 
 class LightningCNN(L.LightningModule):
 
@@ -18,9 +21,12 @@ class LightningCNN(L.LightningModule):
         self.train_auc = torchmetrics.classification.BinaryAUROC()
         self.val_auc = torchmetrics.classification.BinaryAUROC()
         self.test_auc = torchmetrics.classification.BinaryAUROC()
-        self.train_ap = torchmetrics.AveragePrecision(task="binary")
-        self.valid_ap = torchmetrics.AveragePrecision(task="binary")
-        self.test_ap = torchmetrics.AveragePrecision(task="binary")
+        self.train_ap = torchmetrics.classification.BinaryAveragePrecision()
+        self.valid_ap = torchmetrics.classification.BinaryAveragePrecision()
+        self.test_ap = torchmetrics.classification.BinaryAveragePrecision()
+        self.train_stats = torchmetrics.classification.BinaryStatScores()
+        self.valid_stats = torchmetrics.classification.BinaryStatScores()
+        self.test_stats = torchmetrics.classification.BinaryStatScores()
         self.pred1Count = 0
         self.pred0Count = 0
         self.step = 0
@@ -34,11 +40,13 @@ class LightningCNN(L.LightningModule):
 
     def sliding_window(self, inputs, targets, mode='train'):
         losses = []
+        loss = 0
         startIdx = 0
         stopIdx = 4 * self.args["sample_rate"]
         main_loss = nn.BCEWithLogitsLoss()
         opt = self.optimizers()
         scheduler = self.lr_schedulers()
+        steps = 0
         for i in range(4 * self.args["sample_rate"], inputs.shape[2] + self.args["sample_rate"],
                        self.args["sample_rate"]):
             # split into 4 second windows
@@ -57,10 +65,8 @@ class LightningCNN(L.LightningModule):
             loss = main_loss(outputs, targets_window)
             if mode == 'train':
                 self.manual_backward(loss)
-
-                self.clip_gradients(opt, gradient_clip_val=0.5, gradient_clip_algorithm="norm")
                 opt.step()
-                scheduler.step()
+                #scheduler.step()
 
             losses.append(loss.item())
             outputs = torch.sigmoid(outputs)
@@ -69,12 +75,18 @@ class LightningCNN(L.LightningModule):
             if mode == 'train':
                 self.train_auc.update(outputs, targets_window)
                 self.train_acc.update(outputs, targets_window)
+                self.train_ap.update(outputs, targets_window)
+                self.train_stats.update(outputs, targets_window)
             elif mode == 'val':
                 self.val_auc.update(outputs, targets_window)
                 self.valid_acc.update(outputs, targets_window)
+                self.valid_ap.update(outputs, targets_window)
+                self.valid_stats.update(outputs, targets_window)
             elif mode == 'test':
                 self.test_auc.update(outputs, targets_window)
                 self.test_acc.update(outputs, targets_window)
+                self.test_ap.update(outputs, targets_window)
+                self.test_stats.update(outputs, targets_window)
                 self.pred1Count = self.pred1Count + torch.sum(torch.round(outputs))
                 self.pred0Count = self.pred0Count + (outputs.shape[0] - torch.sum(torch.round(outputs)))
 
@@ -90,8 +102,15 @@ class LightningCNN(L.LightningModule):
         self.log("train_loss_step", loss)
         self.log('train_auc_step', self.train_auc.compute())
         self.log('train_acc_step', self.train_acc.compute())
+        self.log('train_ap_step', self.train_ap.compute())
+        stats = self.train_stats.compute()
+
+        self.log('train_tpr_step', stats[0].item() / (stats[0].item() + stats[3].item()))
+        self.log('train_tnr_step', stats[2].item() / (stats[2].item() + stats[1].item()))
         self.train_auc.reset()
         self.train_acc.reset()
+        self.train_ap.reset()
+        self.train_stats.reset()
         for name, param in self.model.named_parameters():
             if param.grad is not None:
                 self.log(name, param.grad.norm())
@@ -103,8 +122,16 @@ class LightningCNN(L.LightningModule):
         self.log("val_loss_step", loss)
         self.log('val_auc_step', self.val_auc.compute())
         self.log('val_acc_step', self.valid_acc.compute())
+        self.log('val_ap_step', self.valid_ap.compute())
+        stats = self.valid_stats.compute()
+        if stats[0].item() + stats[3].item() > 0:
+            self.log('val_tpr_step', stats[0].item() / (stats[0].item() + stats[3].item()))
+        if stats[2].item() + stats[1].item() > 0:
+            self.log('val_tnr_step', stats[2].item() / (stats[2].item() + stats[1].item()))
         self.val_auc.reset()
         self.valid_acc.reset()
+        self.valid_ap.reset()
+        self.valid_stats.reset()
         return torch.tensor(loss, requires_grad=False)
 
     def test_step(self, batch, batch_idx):
@@ -113,11 +140,18 @@ class LightningCNN(L.LightningModule):
         self.log("test_loss_step", loss)
         self.log('test_auc_step', self.test_auc.compute())
         self.log('test_acc_step', self.test_acc.compute())
+        self.log('test_ap_step', self.test_ap.compute())
+        stats = self.test_stats.compute()
+        if stats[0].item() + stats[3].item() > 0:
+            self.log('test_tpr_step', stats[0].item() / (stats[0].item() + stats[3].item()))
+        if stats[2].item() + stats[1].item() > 0:
+            self.log('test_tnr_step', stats[2].item() / (stats[2].item() + stats[1].item()))
         self.test_sum = self.test_sum + self.test_auc.compute()
         self.t_step = self.t_step + 1
         self.test_auc.reset()
         self.test_acc.reset()
-
+        self.test_ap.reset()
+        self.test_stats.reset()
         return torch.tensor(loss, requires_grad=False)
 
     def configure_optimizers(self):

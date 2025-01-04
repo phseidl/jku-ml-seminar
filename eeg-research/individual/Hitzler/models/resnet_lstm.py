@@ -50,36 +50,7 @@ class Resnet(nn.Module):
         self.num_layers = args["num_layers"]
         self.hidden_dim = 256
         self.dropout = args["dropout"]
-        self.num_data_channel = args["num_channel"]
-        self.sincnet_bandnum = args["sincnet_bandnum"]
-
-        self.feature_extractor = args["enc_model"]
-
-        if self.feature_extractor == "raw" or self.feature_extractor == "downsampled":
-            pass
-        else:
-            self.feat_models = nn.ModuleDict([
-                ['psd1', PSD_FEATURE1()],
-                ['psd2', PSD_FEATURE2()],
-                ['stft1', SPECTROGRAM_FEATURE_BINARY1()],
-                ['stft2', SPECTROGRAM_FEATURE_BINARY2()],
-                ['LFCC', LFCC_FEATURE()],
-                ['sincnet', SINCNET_FEATURE(args=args,
-                                             num_eeg_channel=self.num_data_channel)]
-            ])
-            self.feat_model = self.feat_models[self.feature_extractor]
-
-        if args["enc_model"] == "psd1" or args["enc_model"] == "psd2":
-            self.feature_num = 7
-        elif args["enc_model"] == "sincnet":
-            self.feature_num = args["cnn_channel_sizes"][args["sincnet_layer_num"] - 1]
-        elif args["enc_model"] == "stft1":
-            self.feature_num = 50
-        elif args["enc_model"] == "stft2":
-            self.feature_num = 100
-        elif args["enc_model"] == "raw":
-            self.feature_num = 1
-            self.num_data_channel = 1
+        self.num_data_channel = args["num_channels"]
         self.in_planes = 64
 
         activation = 'relu'
@@ -104,30 +75,8 @@ class Resnet(nn.Module):
                 self.activations[activation],
             )
 
-        def conv2d_bn_nodr(inp, oup, kernel_size, stride, padding):
-            return nn.Sequential(
-                nn.Conv2d(inp, oup, kernel_size=kernel_size, stride=stride, padding=padding),
-                nn.BatchNorm2d(oup),
-                self.activations[activation],
-            )
-
-        if args["enc_model"] == "raw":
-            self.conv1 = conv2d_bn(self.num_data_channel, 64, (1, 51), (1, 4), (0, 25))
-            self.maxpool1 = nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4))
-        elif args["enc_model"] == "sincnet":
-            self.conv1 = conv2d_bn(1, 64, (7, 21), (7, 2), (0, 10))
-            self.maxpool1 = nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4))
-        elif args["enc_model"] == "psd1" or args["enc_model"] == "psd2" or args["enc_model"] == "stft2":
-            self.conv1 = conv2d_bn(1, 64, (7, 21), (7, 2), (0, 10))
-            self.maxpool1 = nn.MaxPool2d(kernel_size=(1, 2), stride=(1, 2))
-        elif args["enc_model"] == "LFCC":
-            self.conv1 = conv2d_bn(1, 64, (8, 21), (8, 2), (0, 10))
-            self.maxpool1 = nn.MaxPool2d(kernel_size=(1, 2), stride=(1, 2))
-        elif args["enc_model"] == "downsampled":
-            self.conv2d_200hz = conv2d_bn_nodr(1, 32, (1, 51), (1, 4), (0, 25))
-            self.conv2d_100hz = conv2d_bn_nodr(1, 16, (1, 51), (1, 2), (0, 25))
-            self.conv2d_50hz = conv2d_bn_nodr(1, 16, (1, 51), (1, 1), (0, 25))
-            self.maxpool1 = nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4))
+        self.conv1 = conv2d_bn(self.num_data_channel, 64, (1, 51), (1, 4), (0, 25))
+        self.maxpool1 = nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4))
 
         self.layer1 = self._make_layer(block, 64, 2, stride=1)
         self.layer2 = self._make_layer(block, 128, 2, stride=2)
@@ -147,7 +96,7 @@ class Resnet(nn.Module):
             nn.Linear(in_features=self.hidden_dim, out_features=64, bias=True),
             nn.BatchNorm1d(64),
             self.activations[activation],
-            nn.Linear(in_features=64, out_features=args["output_dim"], bias=True),
+            nn.Linear(in_features=64, out_features=1, bias=True),
         )
 
     def _make_layer(self, block, planes, num_blocks, stride):
@@ -159,34 +108,21 @@ class Resnet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-            x = x.permute(0, 2, 1)
-            if self.feature_extractor == "downsampled":
-                    x = x.unsqueeze(1)
-                    x_200 = self.conv2d_200hz(x)
-                    x_100 = self.conv2d_100hz(x[:, :, :, ::2])
-                    x_50 = self.conv2d_50hz(x[:, :, :, ::4])
-                    x = torch.cat((x_200, x_100, x_50), dim=1)
-                    x = self.maxpool1(x)
-            elif self.feature_extractor != "raw":
-                    x = self.feat_model(x)
-                    x = x.reshape(x.size(0), -1, x.size(3)).unsqueeze(1)
-                    x = self.conv1(x)
-                    x = self.maxpool1(x)
-            else:
-                    x = x.unsqueeze(1)
-                    x = self.conv1(x)
-                    x = self.maxpool1(x)
-            x = self.layer1(x)
-            x = self.layer2(x)
-            x = self.layer3(x)
-            x = self.agvpool(x)
-            x = torch.squeeze(x, 2)
-            x = x.permute(0, 2, 1)
-            self.hidden = tuple(([Variable(var.data) for var in self.hidden]))
-            output, self.hidden = self.lstm(x, self.hidden)
-            output = output[:, -1, :]
-            output = self.classifier(output)
-            return output, self.hidden
+        x = x.permute(0, 2, 1)
+        x = x.unsqueeze(1)
+        x = self.conv1(x)
+        x = self.maxpool1(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.agvpool(x)
+        x = torch.squeeze(x, 2)
+        x = x.permute(0, 2, 1)
+        self.hidden = tuple(([Variable(var.data) for var in self.hidden]))
+        output, self.hidden = self.lstm(x, self.hidden)
+        output = output[:, -1, :]
+        output = self.classifier(output)
+        return output, self.hidden
 
     def init_state(self, device):
             self.hidden = ((torch.zeros(self.num_layers, self.args["batch_size"], self.hidden_dim).to(device),
