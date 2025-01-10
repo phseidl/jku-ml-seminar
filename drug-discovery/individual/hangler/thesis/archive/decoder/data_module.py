@@ -1,7 +1,7 @@
 # chunked_data_module.py
 
 import pytorch_lightning as pl
-from torch.utils.data import random_split, DataLoader, Subset
+from torch.utils.data import random_split, DataLoader
 
 from chunked_dataset import ChunkedMoleculeDataset
 
@@ -15,8 +15,7 @@ class MoleculeDataModule(pl.LightningDataModule):
         batch_size=64,
         num_workers=4,
         train_ratio=0.9,
-        val_ratio=0.1,
-        max_dataset_size=None
+        val_ratio=0.1
     ):
         super().__init__()
         self.vocab = vocab
@@ -28,7 +27,6 @@ class MoleculeDataModule(pl.LightningDataModule):
         self.train_ratio = train_ratio
         self.val_ratio = val_ratio
         self.test_ratio = 1 - train_ratio - val_ratio
-        self.max_dataset_size = max_dataset_size
 
     def setup(self, stage=None):
         full_dataset = ChunkedMoleculeDataset(
@@ -36,18 +34,8 @@ class MoleculeDataModule(pl.LightningDataModule):
             tokenized_smiles_file=self.tokenized_smiles_path,
             vocab=self.vocab,
             max_length=self.max_length
-        ) # emb_tensor, input_ids, target_ids
-
+        )
         n = len(full_dataset)
-
-        if self.max_dataset_size is not None:
-            # create a subset of indices from [0..max_dataset_size-1]
-            limit = min(self.max_dataset_size, n)
-            subset_indices = list(range(limit))
-            full_dataset = Subset(full_dataset, subset_indices)
-
-        n = len(full_dataset)
-
         n_train = int(n * self.train_ratio)
         n_val = int(n * self.val_ratio)
         n_test = n - n_train - n_val

@@ -31,10 +31,10 @@ class ldmol_autoencoder(pl.LightningModule):
         self.tokenizer = tokenizer
         self.training_step_outputs = []
 
-        self.text_encoder = BertForMaskedLM(config=BertConfig.from_json_file(config['bert_config_decoder']))
+        self.text_encoder = BertForMaskedLM(config=BertConfig.from_json_file(config['bert_config_decoder_new']))
         self.use_precomputed = use_precomputed
         if not use_precomputed:
-            bert_config2 = BertConfig.from_json_file(config['bert_config_encoder'])
+            bert_config2 = BertConfig.from_json_file(config['bert_config_decoder_new'])
             self.text_encoder2 = BertModel(config=bert_config2)
 
             if cp:

@@ -80,7 +80,7 @@ class ChunkedMoleculeDataset(Dataset):
         else:
             tokens = tokens[:self.max_length]
         
-        # Prepare input_tokens vs target_tokens (offsest by one)
+        # Prepare input_tokens vs target_tokens
         input_tokens = tokens[:-1]
         target_tokens = tokens[1:]
 

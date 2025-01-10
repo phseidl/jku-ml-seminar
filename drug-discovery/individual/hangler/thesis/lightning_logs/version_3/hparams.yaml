@@ -1,0 +1,6 @@
+config_path: config_decoder.json
+embed_dim: 768
+lr: 5.0e-05
+pad_idx: 373
+use_linear: true
+weight_decay: 0.02
