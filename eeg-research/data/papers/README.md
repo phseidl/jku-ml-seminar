@@ -1,6 +1,10 @@
 # Some links for papers
--- add your name if you pick it ;) e.g. 
+-- add your name if you pick it ;) 
 
+WS24:
+- your name here [your paper link here](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
+  
+WS23:
 - Markus Gutenberger [CLEEGN: A Convolutional Neural Network for Plug-and-Play Automatic EEG Reconstruction](https://openreview.net/forum?id=O3NQgGoGu6)
 - Liza Shchasnovich [BIOT: Cross-data Biosignal Learning in the Wild](https://arxiv.org/abs/2305.10351)
 - Jozsef Kovacs [Ambulatory seizure forecasting with a wrist-worn device using long-short term memory deep learning](https://www.nature.com/articles/s41598-021-01449-2)
@@ -9,6 +13,10 @@ Adversarial Network](https://dl.acm.org/doi/abs/10.1145/3240508.3240641)
 - Florian Hitzler [Real-Time Seizure Detection using EEG: A Comprehensive Comparison of Recent Approaches under a Realistic Setting](https://arxiv.org/abs/2201.08780)
 
 ## Papers
+
+Harnessing Few-Shot Learning for EEG signal classification: a survey of state-of-the-art techniques and future directions
+This paper presents a systematic literature review, providing a comprehensive taxonomy of Data Augmentation (DA), Transfer Learning (TL), and Self-Supervised Learning (SSL) techniques within the context of Few-Shot Learning (FSL) for EEG signal classification. EEG signals have shown significant potential in various paradigms, including Motor Imagery, Emotion Recognition, Visual Evoked Potentials, Steady-State Visually Evoked Potentials, Rapid Serial Visual Presentation, Event-Related Potentials, and Mental Workload. However, challenges such as limited labeled data, noise, and inter/intra-subject variability have impeded the effectiveness of traditional machine learning (ML) and deep learning (DL) models. This review methodically explores how FSL approaches, incorporating DA, TL, and SSL, can address these challenges and enhance classification performance in specific EEG paradigms. It also delves into the open research challenges related to these techniques in EEG signal classification. Specifically, the review examines the identification of DA strategies tailored to various EEG paradigms, the creation of TL architectures for efficient knowledge transfer, and the formulation of SSL methods for unsupervised representation learning from EEG data. Addressing these challenges is crucial for enhancing the efficacy and robustness of FSL-based EEG signal classification. By presenting a structured taxonomy of FSL techniques and discussing the associated research challenges, this systematic review offers valuable insights for future investigations in EEG signal classification. The findings aim to guide and inspire researchers, promoting advancements in applying FSL methodologies for improved EEG signal analysis and classification in real-world settings.
+https://www.frontiersin.org/journals/human-neuroscience/articles/10.3389/fnhum.2024.1421922/full
 
 [Submitted on 3 Jan 2023]
 Unsupervised Multivariate Time-Series Transformers for Seizure Identification on EEG

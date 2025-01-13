@@ -1,0 +1,7 @@
+rdkit-pypi
+boto3
+pytorch-ignite
+gpytorch
+git+https://github.com/y0ast/DUE.git
+git+https://github.com/ml-jku/clamp
+numpy
