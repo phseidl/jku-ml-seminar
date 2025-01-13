@@ -33,7 +33,7 @@ class EEG_FEATURE_TRANSFORMER_V15_GCT(nn.Module):
         self.num_layers = args["num_layers"]
         self.hidden_dim = 256
         self.dropout = args["dropout"]
-        self.num_data_channel = args["num_channels"]
+        self.num_data_channel = 1
         enc_model_dim = 128
 
         activation = 'relu'

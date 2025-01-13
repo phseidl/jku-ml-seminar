@@ -63,7 +63,7 @@ class ALEXNET_V4(nn.Module):
         nn.init.constant_(self.net[11].bias, 1)
 
     def forward(self, x):
-        x = x.permute(0, 2, 1)
+        #x = x.permute(0, 2, 1)
         x = torch.unsqueeze(x, dim=1)
         x = self.conv1(x)
         x = self.net(x)

@@ -50,7 +50,7 @@ class Resnet(nn.Module):
         self.num_layers = args["num_layers"]
         self.hidden_dim = 256
         self.dropout = args["dropout"]
-        self.num_data_channel = args["num_channels"]
+        self.num_data_channel = 1
         self.in_planes = 64
 
         activation = 'relu'
@@ -108,7 +108,7 @@ class Resnet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        x = x.permute(0, 2, 1)
+        #x = x.permute(0, 2, 1)
         x = x.unsqueeze(1)
         x = self.conv1(x)
         x = self.maxpool1(x)
