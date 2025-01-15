@@ -29,18 +29,18 @@ if __name__ == "__main__":
         if not smi:
             continue  # Skip empty lines
 
-        # 1) Check if SMILES is valid using RDKit
+        # Check if SMILES is valid using RDKit
         mol = validate_smiles(smi)
         if mol is None:
             # Not a valid molecule
             logger.warning(f"Invalid SMILES (RDKit parsing failed): {smi}")
             continue
 
-        # 2) Tokenize the valid SMILES
+        # Tokenize the valid SMILES
         tokens = segment_smiles(smi)
         smiles_list.append(tokens)
 
-        # 3) (Optional) keep track of bracketed expressions
+        # keep track of bracketed expressions
         bracket_expressions = re.findall(r"\[[^\]]+\]", smi)
         for expr in bracket_expressions:
             bracket_counts[expr] += 1

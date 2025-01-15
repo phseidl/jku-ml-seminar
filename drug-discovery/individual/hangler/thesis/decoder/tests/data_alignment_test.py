@@ -49,7 +49,54 @@ def check_data_alignment(embedding_file_paths, tokenized_smiles_path, vocab, max
             print(f"Target Tokens: {target_tokens_cleaned}")
             return False
 
-    print("All embeddings are correctly aligned with their tokenized SMILES.")
+    return True
+
+def check_embedding_alignment(embedding_file_paths, tokenized_smiles_path, vocab, max_length):
+    """
+    Check if embeddings returned by the dataset are aligned with the embeddings 
+    directly loaded from the .npy files at the same index.
+
+    Args:
+        embedding_file_paths: List of paths to the embedding .npy files.
+        tokenized_smiles_path: Path to the tokenized SMILES .npy file.
+        vocab: The Vocabulary object.
+        max_length: The maximum length of tokenized SMILES.
+    """
+    # Load all tokenized SMILES
+    tokenized_smiles = np.load(tokenized_smiles_path, allow_pickle=True)
+
+    # Initialize dataset
+    dataset = ChunkedMoleculeDataset(
+        embedding_file_paths=embedding_file_paths,
+        tokenized_smiles_file=tokenized_smiles_path,
+        vocab=vocab,
+        max_length=max_length
+    )
+
+    # Load embeddings directly from .npy files for comparison
+    loaded_embeddings = []
+    for path in embedding_file_paths[:3]:  # Limit to the first 3 files for testing
+        loaded_embeddings.append(np.load(path, mmap_mode="r"))
+
+    # Flatten the list of embeddings to access by global index
+    flattened_embeddings = np.concatenate(loaded_embeddings, axis=0)
+
+    # Iterate through the dataset and validate alignment
+    for idx in tqdm(range(len(flattened_embeddings)), desc="Validating embedding alignment"):
+        # Get embedding from the dataset
+        dataset_embedding, _, _ = dataset[idx]
+
+        # Get the embedding from the flattened list
+        direct_embedding = flattened_embeddings[idx]
+
+        # Check if embeddings match
+        if not np.array_equal(dataset_embedding.numpy(), direct_embedding):
+            print(f"Embedding mismatch at index {idx}:")
+            print(f"Dataset embedding: {dataset_embedding.numpy()}")
+            print(f"Direct embedding:  {direct_embedding}")
+            return False
+
+    print("All embeddings are correctly aligned with the dataset.")
     return True
 
 
@@ -59,8 +106,8 @@ if __name__ == "__main__":
     tokenized_smiles_path = "data/tokenized_smiles.npy"
     vocab_file_path = "decoder/vocab.txt"
 
-    smiles_test = ['C', '=', 'C', '1', 'C', 'C', '2', 'C', '=', 'N', 'c', '3', 'c', 'c', '(', 'O', 'C', 'C', 'C', 'C', 'C', 'O', 'c', '4', 'c', 'c', '5', 'c', '(', 'c', 'c', '4', 'O', 'C', ')', 'C', '(', '=', 'O', ')', 'N', '4', 'C', 'C', '(', '=', 'C', ')', 'C', 'C', '4', 'C', '(', 'O', ')', 'N', '5', 'C', '(', '=', 'O', ')', 'O', 'C', 'c', '4', 'c', 'c', 'c', '(', 'N', 'C', '(', '=', 'O', ')', 'C', '(', 'C', ')', 'N', 'C', '(', '=', 'O', ')', 'C', '(', 'N', 'C', '(', '=', 'O', ')', 'C', 'C', 'O', 'C', 'C', 'N', 'C', '(', '=', 'O', ')', 'C', 'C', 'N', '5', 'C', '(', '=', 'O', ')', 'C', '=', 'C', 'C', '5', '=', 'O', ')', 'C', '(', 'C', ')', 'C', ')', 'c', 'c', '4', ')', 'c', '(', 'O', 'C', ')', 'c', 'c', '3', 'C', '(', '=', 'O', ')', 'N', '2', 'C', '1']
-    print("len: ", len(smiles_test))
+    #smiles_test = ['C', '=', 'C', '1', 'C', 'C', '2', 'C', '=', 'N', 'c', '3', 'c', 'c', '(', 'O', 'C', 'C', 'C', 'C', 'C', 'O', 'c', '4', 'c', 'c', '5', 'c', '(', 'c', 'c', '4', 'O', 'C', ')', 'C', '(', '=', 'O', ')', 'N', '4', 'C', 'C', '(', '=', 'C', ')', 'C', 'C', '4', 'C', '(', 'O', ')', 'N', '5', 'C', '(', '=', 'O', ')', 'O', 'C', 'c', '4', 'c', 'c', 'c', '(', 'N', 'C', '(', '=', 'O', ')', 'C', '(', 'C', ')', 'N', 'C', '(', '=', 'O', ')', 'C', '(', 'N', 'C', '(', '=', 'O', ')', 'C', 'C', 'O', 'C', 'C', 'N', 'C', '(', '=', 'O', ')', 'C', 'C', 'N', '5', 'C', '(', '=', 'O', ')', 'C', '=', 'C', 'C', '5', '=', 'O', ')', 'C', '(', 'C', ')', 'C', ')', 'c', 'c', '4', ')', 'c', '(', 'O', 'C', ')', 'c', 'c', '3', 'C', '(', '=', 'O', ')', 'N', '2', 'C', '1']
+    #print("len: ", len(smiles_test))
 
     # Load vocabulary
     with open(vocab_file_path, "r", encoding="utf-8") as vf:
@@ -68,11 +115,17 @@ if __name__ == "__main__":
     vocab = Vocabulary(tokens)
 
     # Maximum sequence length
-    max_length = 50
+    max_length = 150
 
     # Run the alignment check
-    is_aligned = check_data_alignment(embedding_file_paths, tokenized_smiles_path, vocab, max_length)
+    # is_aligned = check_data_alignment(embedding_file_paths, tokenized_smiles_path, vocab, max_length)
+    # if not is_aligned:
+    #     print("Data alignment failed. Please check your preprocessing or data loading.")
+    # else:
+    #     print("Data alignment check passed.")
+
+    is_aligned = check_embedding_alignment(embedding_file_paths, tokenized_smiles_path, vocab, max_length)
     if not is_aligned:
-        print("Data alignment failed. Please check your preprocessing or data loading.")
+        print("Embedding alignment failed. Please check your dataset or indexing logic.")
     else:
-        print("Data alignment check passed.")
+        print("Embedding alignment check passed.")

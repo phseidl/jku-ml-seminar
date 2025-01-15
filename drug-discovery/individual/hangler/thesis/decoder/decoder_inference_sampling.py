@@ -117,7 +117,6 @@ def decode_smiles_batch(
     )  # shape [batch_size, 1]
 
     # We'll store the final decoded sequences as lists of token IDs
-    # We'll do a specialized approach if k>1 to match your old code.
     if k == 1:
         # Single-sequence decoding (greedy or sampling)
         for _ in range(max_length):
@@ -209,7 +208,6 @@ def decode_smiles_batch(
                             next_candidates_list.append(new_seq[0])
 
                 # If we accumulate enough final outputs, we can break early
-                # (In your old code, you break if len(final_outputs) >= k or so)
                 if len(final_outputs) >= k:
                     break
 
@@ -320,8 +318,22 @@ def decode_and_evaluate(
     """
     # 1) Load the checkpoint
     ckpt_data = torch.load(checkpoint_path, map_location=device)
+    config = {
+        'property_width': 768,
+        'embed_dim': 256,
+        'batch_size': 128,
+        'temp': 0.07,
+        'mlm_probability': 0.15,
+        'momentum': 0.995,
+        'alpha': 0.4,
+        'bert_config_decoder': './config_decoder_clamp.json',
+        'schedular': {'sched': 'cosine', 'lr': 0.5e-4, 'epochs': 5, 'min_lr': 1e-5,
+                      'decay_rate': 1, 'warmup_lr': 5e-5, 'warmup_epochs': 20, 'cooldown_epochs': 0},
+        'optimizer': {'opt': 'adamW', 'lr': 0.5e-4, 'weight_decay': 0.02}
+    }
+
     model = XbertDecoder(
-        config_path=config_path,
+        config=config,
         pad_idx=vocab.pad_idx,
         embed_dim=768,  # adapt if different
         use_linear=True

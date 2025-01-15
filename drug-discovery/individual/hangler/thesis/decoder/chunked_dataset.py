@@ -1,5 +1,3 @@
-# chunked_dataset.py
-
 import torch
 from torch.utils.data import Dataset
 import numpy as np
@@ -56,8 +54,17 @@ class ChunkedMoleculeDataset(Dataset):
         # Total samples = sum of sizes
         return self.offsets[-1]
 
+    def get_raw_smiles_tokens(self, idx):
+        """
+        Return the raw tokenized SMILES (as loaded from self.tokenized_smiles)
+        for the provided 'idx', WITHOUT adding <sos>, <eos>, or padding.
+        This helps the MoleculeDataModule check the SMILES length easily.
+        """
+        return self.tokenized_smiles[idx]
+
+    
     def __getitem__(self, idx):
-        # 1) Find which file chunk 'idx' falls into
+        # Find which file chunk 'idx' falls into
         file_idx = None
         for i in range(len(self.offsets) - 1):
             if self.offsets[i] <= idx < self.offsets[i+1]:
@@ -70,17 +77,17 @@ class ChunkedMoleculeDataset(Dataset):
         # 3) Load the embedding row from memory-map
         emb = self.embeddings_memmaps[file_idx][local_idx]
 
-        # 4) Load the tokenized SMILES from the single file
+        # 4) Load the raw tokenized SMILES from self.tokenized_smiles
+        #    Then add <sos>, <eos>, etc.
         tokens = self.tokenized_smiles[idx]
-
-        # 5) Pre-process tokens: add <sos>, <eos>, pad/truncate
         tokens = [self.vocab.start_token] + list(tokens) + [self.vocab.end_token]
+        
         if len(tokens) < self.max_length:
             tokens += [self.vocab.pad_token] * (self.max_length - len(tokens))
         else:
             tokens = tokens[:self.max_length]
         
-        # Prepare input_tokens vs target_tokens (offsest by one)
+        # Prepare input_tokens vs target_tokens
         input_tokens = tokens[:-1]
         target_tokens = tokens[1:]
 
