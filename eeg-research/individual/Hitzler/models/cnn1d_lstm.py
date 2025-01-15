@@ -14,37 +14,7 @@ class CNN1D_LSTM_V8(nn.Module):
         self.num_layers = args["num_layers"]
         self.hidden_dim = 512
         self.dropout = args["dropout"]
-        self.num_data_channel = args["num_channel"]
-        self.sincnet_bandnum = args["sincnet_bandnum"]
-
-        self.feature_extractor = args["enc_model"]
-
-        if self.feature_extractor == "raw" or self.feature_extractor == "downsampled":
-            pass
-        else:
-            self.feat_models = nn.ModuleDict([
-                ['psd1', PSD_FEATURE1()],
-                ['psd2', PSD_FEATURE2()],
-                ['stft1', SPECTROGRAM_FEATURE_BINARY1()],
-                ['stft2', SPECTROGRAM_FEATURE_BINARY2()],
-                ['LFCC', LFCC_FEATURE()],
-                ['sincnet', SINCNET_FEATURE(args=args,
-                                            num_eeg_channel=self.num_data_channel)]
-            ])
-            self.feat_model = self.feat_models[self.feature_extractor]
-
-        if args["enc_model"] == "psd1" or args["enc_model"] == "psd2":
-            self.feature_num = 7
-        elif args["enc_model"] == "LFCC":
-            self.feature_num = 8
-        elif args["enc_model"] == "sincnet":
-            self.feature_num = args["cnn_channel_sizes"][args["sincnet_layer_num"] - 1]
-        elif args["enc_model"] == "stft1":
-            self.feature_num = 50
-        elif args["enc_model"] == "stft2":
-            self.feature_num = 100
-        elif args["enc_model"] == "raw" or args["enc_model"] == "downsampled":
-            self.feature_num = 1
+        self.num_data_channel = args["num_channels"]
 
         self.conv1dconcat_len = self.feature_num * self.num_data_channel
 
