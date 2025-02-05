@@ -1,22 +1,28 @@
-import numpy as np
-import torch.nn.functional as F
+# Copyright (c) 2022, Kwanhyung Lee, AITRICS. All rights reserved.
+#
+# Licensed under the MIT License;
+# you may not use this file except in compliance with the License.
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import importlib
 
 
-class CNN1D_LSTM_V8(nn.Module):
+class CNN1D_LSTM(nn.Module):
     def __init__(self, args: dict, device):
-        super(CNN1D_LSTM_V8, self).__init__()
+        super(CNN1D_LSTM, self).__init__()
         self.args = args
 
         self.num_layers = args["num_layers"]
         self.hidden_dim = 512
         self.dropout = args["dropout"]
-        self.num_data_channel = args["num_channels"]
 
-        self.conv1dconcat_len = self.feature_num * self.num_data_channel
+        self.conv1dconcat_len = 19
 
         activation = 'relu'
         self.activations = nn.ModuleDict([
@@ -48,51 +54,12 @@ class CNN1D_LSTM_V8(nn.Module):
                 self.activations[activation],
             )
 
-        if args["enc_model"] == "raw":
-            self.features = nn.Sequential(
-                conv1d_bn(self.conv1dconcat_len, 64, 51, 4, 25),
-                nn.MaxPool1d(kernel_size=4, stride=4),
-                conv1d_bn(64, 128, 21, 2, 10),
-                conv1d_bn(128, 256, 9, 2, 4),
-            )
-        elif args["enc_model"] == "sincnet":
-            self.features = nn.Sequential(
-                conv1d_bn(self.conv1dconcat_len, 64, 21, 2, 10),
-                conv1d_bn(64, 128, 21, 2, 10),
-                nn.MaxPool1d(kernel_size=4, stride=4),
-                conv1d_bn(128, 256, 9, 2, 4),
-            )
-        elif args["enc_model"] == "psd1" or args["enc_model"] == "psd2":
-            self.features = nn.Sequential(
-                conv1d_bn(self.conv1dconcat_len, 64, 21, 2, 10),
-                conv1d_bn(64, 128, 21, 2, 10),
-                nn.MaxPool1d(kernel_size=2, stride=2),
-                conv1d_bn(128, 256, 9, 1, 4),
-            )
-        elif args["enc_model"] == "LFCC":
-            self.features = nn.Sequential(
-                conv1d_bn(self.conv1dconcat_len, 64, 21, 2, 10),
-                conv1d_bn(64, 128, 21, 2, 10),
-                nn.MaxPool1d(kernel_size=2, stride=2),
-                conv1d_bn(128, 256, 9, 1, 4),
-            )
-        elif args["enc_model"] == "downsampled":
-            self.conv1d_200hz = conv1d_bn_nodr(self.conv1dconcat_len, 32, 51, 4, 25)
-            self.conv1d_100hz = conv1d_bn_nodr(self.conv1dconcat_len, 16, 51, 2, 25)
-            self.conv1d_50hz = conv1d_bn_nodr(self.conv1dconcat_len, 16, 51, 1, 25)
-
-            self.features = nn.Sequential(
-                nn.MaxPool1d(kernel_size=4, stride=4),
-                conv1d_bn(64, 128, 21, 2, 10),
-                conv1d_bn(128, 256, 9, 1, 4),
-            )
-        else:
-            self.features = nn.Sequential(
-                conv1d_bn(self.conv1dconcat_len, 64, 21, 2, 10),
-                conv1d_bn(64, 128, 21, 2, 10),
-                nn.MaxPool1d(kernel_size=2, stride=2),
-                conv1d_bn(128, 256, 9, 1, 4),
-            )
+        self.features = nn.Sequential(
+            conv1d_bn(self.conv1dconcat_len, 64, 51, 4, 25),
+            nn.MaxPool1d(kernel_size=4, stride=4),
+            conv1d_bn(64, 128, 21, 2, 10),
+            conv1d_bn(128, 256, 9, 2, 4),
+        )
 
         self.agvpool = nn.AdaptiveAvgPool1d(1)
 
@@ -108,19 +75,11 @@ class CNN1D_LSTM_V8(nn.Module):
             nn.Linear(in_features=self.hidden_dim, out_features=64, bias=True),
             nn.BatchNorm1d(64),
             self.activations[activation],
-            nn.Linear(in_features=64, out_features=args["output_dim"], bias=True),
+            nn.Linear(in_features=64, out_features=1, bias=True),
         )
 
     def forward(self, x):
         #x = x.permute(0, 2, 1)
-        if self.feature_extractor == "downsampled":
-            x_200 = self.conv1d_200hz(x)
-            x_100 = self.conv1d_100hz(x[:, :, ::2])
-            x_50 = self.conv1d_50hz(x[:, :, ::4])
-            x = torch.cat((x_200, x_100, x_50), dim=1)
-        elif self.feature_extractor != "raw":
-            x = self.feat_model(x)
-            x = torch.reshape(x, (self.args["batch_size"], self.conv1dconcat_len, x.size(3)))
         x = self.features(x)
         x = self.agvpool(x)
         x = x.permute(0, 2, 1)

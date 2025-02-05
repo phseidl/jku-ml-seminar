@@ -10,11 +10,6 @@ class VGG16(nn.Module):
     """
 
     def __init__(self, args: dict, device):
-        """
-        Define and allocate layers for this neural net.
-        Args:
-            num_classes (int): number of classes to predict with this model
-        """
         super(VGG16, self).__init__()
 
         self.args = args
@@ -91,11 +86,11 @@ class VGG16(nn.Module):
 
     def forward(self, x):
         #x = x.permute(0, 2, 1)
-        x = torch.unsqueeze(x, dim=1)
+        #x = torch.unsqueeze(x, dim=1)
         x = self.features(x)
         x = x.view(x.shape[0], -1)  # Flatten the output for the fully connected layers
         x = self.classifier(x)
-        return x, 0
+        return x
 
     def init_state(self, device):
         return 0

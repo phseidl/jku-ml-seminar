@@ -1,3 +1,4 @@
+import argparse
 import os
 from datetime import datetime
 
@@ -8,7 +9,7 @@ from numpy import save
 from individual.Hitzler.utils import get_seizure_times
 
 
-def process_data(data_dir, save_location, channels):
+def process_data(data_dir, save_location, channels, alternative_channel_names):
 
     if not os.path.isdir(os.path.join(save_location, 'edf')):
         os.mkdir(os.path.join(save_location, 'edf'))
@@ -19,6 +20,10 @@ def process_data(data_dir, save_location, channels):
     patients_path = [os.path.join(data_dir, f_) for f_ in patients]
     no_of_seizures = 0
     no_of_non_seizures = 0
+    # frequency bands for STFT
+    freqs = np.linspace(1, 50, 25)
+    # time bandwidth for STFT
+    time_bandwidth = 2.0
     for iPatient in range(len(patients_path)):
         patient = patients_path[iPatient]
         # get list of sessions for patient
@@ -42,22 +47,23 @@ def process_data(data_dir, save_location, channels):
                     # read edf file
                     edfPath = os.path.join(montage, rec_edfs[irec])
                     eeg = mne.io.read_raw_edf(edfPath, preload=True)
+
                     # get sampling frequency
                     sfreq = eeg.info['sfreq']
                     if sfreq < 200:
                         print('Sampling frequency is less than 200Hz')
                         continue
-
                     # pick channels, if channel not found in recording, skip
-                    try:
-                        eeg.pick(channels)
-                    except:
-                        channels_2 = ['EEG FP1-LE', 'EEG FP2-LE', 'EEG F3-LE', 'EEG F4-LE', 'EEG C3-LE', 'EEG C4-LE', 'EEG P3-LE', 'EEG P4-LE', 'EEG O1-LE', 'EEG O2-LE', 'EEG F7-LE', 'EEG F8-LE', 'EEG T3-LE', 'EEG T4-LE', 'EEG T5-LE', 'EEG T6-LE', 'EEG CZ-LE', 'EEG PZ-LE', 'EEG FZ-LE']
-                        if not set(channels_2).issubset(set(eeg.ch_names)):
-                            print('Channel not found in recording')
-                            continue
-                        eeg.pick(channels_2)
 
+                    if not set(channels).issubset(set(eeg.ch_names)):
+                        print('Channels not found in recording, trying alternative channels')
+                        if not set(alternative_channel_names).issubset(set(eeg.ch_names)):
+                            print('Alternative channels not found in recording')
+                            continue
+                        else:
+                            eeg.pick(alternative_channel_names)
+                    else:
+                        eeg.pick(channels)
                     # set measurement date to today if not set, otherwise error occurs
                     if eeg.info['meas_date'].year < 2000:
                         eeg.set_meas_date((datetime.today().timestamp(), 0))
@@ -98,14 +104,22 @@ def process_data(data_dir, save_location, channels):
                     for i in range(num_intervals):
                         start_index = i * interval_size
                         end_index = (i + 1) * interval_size
+                        # check if interval contains seizure or not for statistics
                         if labels[start_index:end_index].sum() == 0:
                             no_of_non_seizures += 1
                         elif labels[start_index:end_index].sum() > 0:
                             no_of_seizures += 1
                         labels_data_list.append(labels[start_index:end_index])
 
-
+                    # calculate STFT for each interval and save each epoch + labels as a separate file
                     for i in range(len(labels_data_list)):
+                        epoch = epochs_data[i]
+                        power = mne.time_frequency.tfr_array_multitaper(
+                            epoch[np.newaxis, :, :], sfreq=epochs.info['sfreq'], freqs=freqs, time_bandwidth=time_bandwidth,
+                            output='power', n_jobs=3
+                        )  # Shape: (n_epochs, 19, len(freqs), 6000)
+
+                        features = np.mean(power, axis=2)
                         patient_name = patient.split('/')[-1].split("\\")[-1]
                         saveFilename = 'DataArray_Patient_'+ str(patient_name)+ "_" + str(iPatient).zfill(3) + "_Session" + str(iSession).zfill(
                             3) + "_Rec" + str(irec).zfill(3) + "_Split" + str(i).zfill(3)
@@ -113,13 +127,24 @@ def process_data(data_dir, save_location, channels):
                         save(os.path.join(save_location, 'labels', saveFilename + ".labels"), labels_data_list[i])
                         # save epochs to edf folder
                         epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-epo.fif"), overwrite=True)
+                        # save spectogram to edf folder
+                        np.save(os.path.join(save_location, 'edf', saveFilename + "-stft.npy"), np.squeeze(features))
     print('Number of seizures: ', no_of_seizures)
     print('Number of non-seizures: ', no_of_non_seizures)
 
 
-# main
 if __name__ == '__main__':
-    data_dir = 'C:/Users/FlorianHitzler/Documents/Uni/Bachelor Thesis/new_download/jku-ml-seminar23/eeg-research/individual/Hitzler/data/raw/dev'
-    save_location = 'C:/Users/FlorianHitzler/Documents/Uni/Bachelor Thesis/new_download/jku-ml-seminar23/eeg-research/individual/Hitzler/data/processed/dev'
-    channels = ['EEG FP1-REF', 'EEG FP2-REF', 'EEG F3-REF', 'EEG F4-REF','EEG C3-REF', 'EEG C4-REF', 'EEG P3-REF', 'EEG P4-REF', 'EEG O1-REF', 'EEG O2-REF', 'EEG F7-REF', 'EEG F8-REF', 'EEG T3-REF', 'EEG T4-REF', 'EEG T5-REF', 'EEG T6-REF', 'EEG CZ-REF', 'EEG PZ-REF', 'EEG FZ-REF']
-    process_data(data_dir, save_location, channels)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', type=str, default='data/raw/dev')
+    parser.add_argument('--save_location', type=str, default='data/processed/dev')
+    parser.add_argument('--channels', type=str, default='EEG FP1-REF, EEG FP2-REF, EEG F3-REF, EEG F4-REF, EEG C3-REF, EEG C4-REF, EEG P3-REF, EEG P4-REF, EEG O1-REF, EEG O2-REF, EEG F7-REF, EEG F8-REF, EEG T3-REF, EEG T4-REF, EEG T5-REF, EEG T6-REF, EEG CZ-REF, EEG PZ-REF, EEG FZ-REF')
+
+    # alternative channels
+    parser.add_argument('--alternative_channel_names', type=str, default='EEG FP1-LE, EEG FP2-LE, EEG F3-LE, EEG F4-LE, EEG C3-LE, EEG C4-LE, EEG P3-LE, EEG P4-LE, EEG O1-LE, EEG O2-LE, EEG F7-LE, EEG F8-LE, EEG T3-LE, EEG T4-LE, EEG T5-LE, EEG T6-LE, EEG CZ-LE, EEG PZ-LE, EEG FZ-LE')
+    args = parser.parse_args()
+    data_dir = args["data_dir"] #'C:/Users/FlorianHitzler/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/raw/dev'
+    save_location = args["save_location"] #'C:/Users/FlorianHitzler/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/processed/dev'
+    channels = [channel for channel in args["channels"].split(',')]
+    # alternative channels
+    alternative_channel_names = [channel for channel in args["alternative_channel_names"].split(',')]
+    process_data(data_dir, save_location, channels, alternative_channel_names)

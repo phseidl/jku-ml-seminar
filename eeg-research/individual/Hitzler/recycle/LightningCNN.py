@@ -1,14 +1,15 @@
-import math
-
 import lightning as L
 import numpy as np
+#import plotly.express as px
+#import plotly.graph_objects as go
 import torch
 import torchmetrics
+#from plotly.subplots import make_subplots
 from torch import optim, nn
 
-from cosine_annealing_with_warmupSingle import CosineAnnealingWarmUpSingle
-from torch.optim import lr_scheduler
 
+#mne.set_config('MNE_BROWSER_BACKEND', 'qt')
+#mpl.use('TkAgg')
 
 class LightningCNN(L.LightningModule):
 
@@ -52,6 +53,8 @@ class LightningCNN(L.LightningModule):
             # split into 4 second windows
             eeg_window = inputs[:, :, startIdx:stopIdx]
             targets_window = targets[:, startIdx:stopIdx]
+            #self.analyze_eeg(self.model, [self.model.features[-1]], eeg_window[0], targets_window[0])
+
             outputs, maps = self.model(eeg_window)
             outputs = outputs.squeeze(1)
             outputs = outputs.type(torch.FloatTensor)
@@ -99,6 +102,7 @@ class LightningCNN(L.LightningModule):
 
         inputs, targets = batch
         loss = self.sliding_window(inputs, targets, 'train')
+
         self.log("train_loss_step", loss)
         self.log('train_auc_step', self.train_auc.compute())
         self.log('train_acc_step', self.train_acc.compute())
@@ -137,6 +141,7 @@ class LightningCNN(L.LightningModule):
     def test_step(self, batch, batch_idx):
         inputs, targets = batch
         loss = self.sliding_window(inputs, targets, 'test')
+        self.analyze_eeg(self.model, [self.model.layer3[-1]], inputs, targets)
         self.log("test_loss_step", loss)
         self.log('test_auc_step', self.test_auc.compute())
         self.log('test_acc_step', self.test_acc.compute())
@@ -156,11 +161,12 @@ class LightningCNN(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.args["lr_init"], weight_decay=1e-6)
-        scheduler = CosineAnnealingWarmUpSingle(optimizer,
-                                                max_lr=self.args["lr_init"] * math.sqrt(self.args["batch_size"]),
-                                                epochs=self.args["epochs"],
-                                                steps_per_epoch=self.args["steps_per_epoch"],
-                                                div_factor=math.sqrt(self.args["batch_size"]))
+        #scheduler = CosineAnnealingWarmUpSingle(optimizer,
+        #                                        max_lr=self.args["lr_init"] * math.sqrt(self.args["batch_size"]),
+        #                                        epochs=self.args["epochs"],
+        #                                        steps_per_epoch=self.args["steps_per_epoch"],
+        #                                        div_factor=math.sqrt(self.args["batch_size"]))
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
         return [optimizer], [scheduler]
 
     def on_train_epoch_end(self):
@@ -174,6 +180,96 @@ class LightningCNN(L.LightningModule):
         self.log('pred1Count', self.pred1Count)
         self.log('auc_avg', self.test_sum / self.t_step)
 
+
+    '''
+    def analyze_eeg(self,model, target_layers, input, targets):
+        info = mne.create_info(input.shape[0], sfreq=200, ch_types=['eeg'] * 19)
+        raw = mne.io.RawArray(input, info)
+        data = raw.get_data()
+        times = raw.times
+        #plt.plot(data.times, data.get_data().T)
+        #plt.xlabel('time (s)')
+        #plt.ylabel('MEG data (T)')
+        #fig = go.Figure()
+        #for idx, channel_data in enumerate(data):
+        #    fig.add_trace(go.Scatter(
+        #        x=times,
+        #        y=channel_data,
+        #        mode='lines',
+        #        name=raw.info['ch_names'][idx]
+        #    ))
+        #fig.update_layout(
+        #    title="MEG Data Visualization",
+        #    xaxis_title="Time (s)",
+        #    yaxis_title="MEG Data (T)",
+        #    showlegend=True,
+        #)
+
+        # Display the plot
+        #fig.show()
+        n_channels = 10
+        step = 1. / n_channels
+        fig = make_subplots(
+            rows=n_channels, cols=1, shared_xaxes=True,
+            vertical_spacing=step / 2  # Adjust spacing between subplots
+        )
+        ch_names = raw.info['ch_names'][:n_channels]
+        # Add each channel as a separate trace
+        for ii in range(n_channels):
+            fig.add_trace(
+                go.Scatter(
+                    x=times,
+                    y=data.T[:, ii],
+                    mode='lines',
+                    name=ch_names[ii]  # Channel name
+                ),
+                row=ii + 1, col=1  # Specify the row for each trace
+            )
+
+        # Add annotations for channel names
+        for ii, ch_name in enumerate(ch_names):
+            fig.add_annotation(
+                x=-0.05, y=0.5,  # Adjust position of annotation
+                xref='paper', yref=f'y{ii + 1}',  # Attach to the correct y-axis
+                text=ch_name,
+                font=dict(size=9),
+                showarrow=False
+            )
+        for ii in range(n_channels):
+            fig.update_yaxes(
+                showticklabels=False,
+                zeroline=False,
+                showgrid=False,
+                row=ii + 1, col=1
+            )
+        # Update the layout
+        fig.update_layout(
+            height=600, width=1000,  # Set figure size
+            title="MEG Data Visualization with Shared X-Axis",
+            #xaxis_title="Time (s)",
+            showlegend=False,  # Disable legend
+            margin=dict(l=50, r=50, t=50, b=50)
+        )
+
+        # Show the plot
+        fig.show()
+        # plot target
+        #plt.plot(targets.squeeze(0).cpu().numpy())
+        targets = targets.cpu().numpy()
+        #targets[100:1000] = 1
+        fig = px.line(targets)
+        fig.show()
+        target_class = None
+        with GradCAM(model=model, target_layers=target_layers) as gradcam:
+            grayscale_cam = gradcam(input_tensor=input.unsqueeze(0).unsqueeze(0), targets=target_class)
+            grayscale_cam = grayscale_cam[0, :]
+            visualization = show_cam_on_image(input.numpy(), grayscale_cam)
+            fig = px.imshow(visualization)
+            fig.show()
+
+            print(f'GradCAM:')
+            #return heatmap, result
+'''
     '''
     def plot_with_color_gradient(self, sequence, importance):
         # transpose sequence to channels x sequence length

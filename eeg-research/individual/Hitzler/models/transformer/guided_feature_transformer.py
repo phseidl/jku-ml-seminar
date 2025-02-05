@@ -9,25 +9,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-import torch.nn.functional as F
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import importlib
-from individual.Hitzler.transformer import *
 
-from torch import Tensor
-from typing import Tuple, Optional, Any
-import torch.nn.init as init
-
-from individual.Hitzler.transformer.encoder import TransformerEncoder
-from individual.Hitzler.transformer.module import PositionalEncoding
+from encoder import TransformerEncoder
+from module import PositionalEncoding
 
 
-class EEG_FEATURE_TRANSFORMER_V15_GCT(nn.Module):
+class GFT(nn.Module):
     def __init__(self, args: dict, device):
-        super(EEG_FEATURE_TRANSFORMER_V15_GCT, self).__init__()
+        super(GFT, self).__init__()
         self.args = args
 
         self.num_layers = args["num_layers"]
@@ -111,7 +103,6 @@ class EEG_FEATURE_TRANSFORMER_V15_GCT(nn.Module):
         )
 
     def forward(self, x):
-        #x = x.permute(0, 2, 1)
         if self.feature_extractor != "raw":
             x = self.feat_model(x)
             x = x.reshape(x.size(0), -1, x.size(3)).unsqueeze(1)

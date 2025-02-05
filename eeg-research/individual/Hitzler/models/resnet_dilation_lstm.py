@@ -1,4 +1,4 @@
-# Copyright (c) 2022, Kwanhyung Lee, AITRICS. All rights reserved.
+# Copyright (c) 2022, Kwanhyung Lee. All rights reserved.
 #
 # Licensed under the MIT License;
 # you may not use this file except in compliance with the License.
@@ -17,21 +17,23 @@ from torch.autograd import Variable
 import importlib
 
 
+
 class BasicBlock(nn.Module):
 
     def __init__(self, in_planes, planes, stride=1):
         super(BasicBlock, self).__init__()
 
         self.net = nn.Sequential(
-            nn.Conv2d(in_planes, planes, kernel_size=(1,9), stride=(1,stride), padding=(0,4), bias=False),
+            nn.Conv2d(in_planes, planes, kernel_size=(1, 9), stride=(1, stride), padding=(0, 4), bias=False),
             nn.BatchNorm2d(planes),
             nn.ReLU(),
-            nn.Conv2d(planes, planes, kernel_size=(1,9), stride=1, padding=(0,4), bias=False),
+            nn.Conv2d(planes, planes, kernel_size=(1, 9), stride=1, padding=(0, 4), bias=False),
             nn.BatchNorm2d(planes)
         )
 
         self.shortcut = nn.Sequential(
-            nn.Conv2d(in_planes, planes, kernel_size=1, stride=(1,stride), bias=False),
+            nn.Conv2d(in_planes, planes,
+                      kernel_size=1, stride=(1, stride), bias=False),
             nn.BatchNorm2d(planes)
         )
 
@@ -42,14 +44,17 @@ class BasicBlock(nn.Module):
         return out
 
 
-class ResNet_LSTM(nn.Module):
+class Resnet_Dialation_LSTM(nn.Module):
     def __init__(self, args: dict, device):
-        super(ResNet_LSTM, self).__init__()
+        super(Resnet_Dialation_LSTM, self).__init__()
         self.args = args
 
         self.num_layers = args["num_layers"]
         self.hidden_dim = 256
         self.dropout = args["dropout"]
+        self.num_data_channel = 1
+
+        self.feature_num = 1
         self.num_data_channel = 1
         self.in_planes = 64
 
@@ -64,7 +69,9 @@ class ResNet_LSTM(nn.Module):
             ['elu', nn.ELU()]
         ])
 
-        self.hidden = ((torch.zeros(self.num_layers, args["batch_size"], self.hidden_dim).to(device), torch.zeros(self.num_layers, args["batch_size"], self.hidden_dim).to(device)))
+        # Create a new variable for the hidden state, necessary to calculate the gradients
+        self.hidden = ((torch.zeros(self.num_layers, args["batch_size"], self.hidden_dim).to(device),
+                        torch.zeros(self.num_layers, args["batch_size"], self.hidden_dim).to(device)))
 
         block = BasicBlock
 
@@ -75,7 +82,10 @@ class ResNet_LSTM(nn.Module):
                 self.activations[activation],
             )
 
-        self.conv1 = conv2d_bn(self.num_data_channel, 64, (1, 51), (1, 4), (0, 25))
+        self.dilated_conv2d_1 = conv2d_bn(self.num_data_channel, 32, (1, 51), (1, 4), (0, 25), (1, 1))
+        self.dilated_conv2d_2 = conv2d_bn(self.num_data_channel, 16, (1, 51), (1, 4), (0, 50), (1, 2))
+        self.dilated_conv2d_3 = conv2d_bn(self.num_data_channel, 16, (1, 51), (1, 4), (0, 100), (1, 4))
+
         self.maxpool1 = nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4))
 
         self.layer1 = self._make_layer(block, 64, 2, stride=1)
@@ -89,8 +99,7 @@ class ResNet_LSTM(nn.Module):
             hidden_size=self.hidden_dim,
             num_layers=args["num_layers"],
             batch_first=True,
-            dropout=args["dropout"]
-        )
+            dropout=args["dropout"])
 
         self.classifier = nn.Sequential(
             nn.Linear(in_features=self.hidden_dim, out_features=64, bias=True),
@@ -110,7 +119,10 @@ class ResNet_LSTM(nn.Module):
     def forward(self, x):
         #x = x.permute(0, 2, 1)
         x = x.unsqueeze(1)
-        x = self.conv1(x)
+        x1 = self.dilated_conv2d_1(x)
+        x2 = self.dilated_conv2d_2(x)
+        x3 = self.dilated_conv2d_3(x)
+        x = torch.cat((x1, x2, x3), dim=1)
         x = self.maxpool1(x)
         x = self.layer1(x)
         x = self.layer2(x)
@@ -125,5 +137,6 @@ class ResNet_LSTM(nn.Module):
         return output, self.hidden
 
     def init_state(self, device):
-            self.hidden = ((torch.zeros(self.num_layers, self.args["batch_size"], self.hidden_dim).to(device),
-                            torch.zeros(self.num_layers, self.args["batch_size"], self.hidden_dim).to(device)))
+        self.hidden = ((torch.zeros(self.num_layers, self.args["batch_size"], self.hidden_dim).to(device),
+                        torch.zeros(self.num_layers, self.args["batch_size"], self.hidden_dim).to(device)))
+

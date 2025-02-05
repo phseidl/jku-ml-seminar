@@ -1,21 +1,16 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
-import torch.optim as optim
 
-class ALEXNET_V4(nn.Module):
+
+# Code reference: https://github.com/dansuh17/alexnet-pytorch
+
+class AlexNet(nn.Module):
     """
     Neural network model consisting of layers proposed by AlexNet paper.
     """
 
-    def __init__(self, args: dict):
-        """
-        Define and allocate layers for this neural net.
-        Args:
-            num_classes (int): number of classes to predict with this model
-        """
-        super(ALEXNET_V4, self).__init__()
+    def __init__(self, args: dict, device):
+        super(AlexNet, self).__init__()
 
         self.args = args
         self.in_channels = self.args["num_channels"]
@@ -63,7 +58,6 @@ class ALEXNET_V4(nn.Module):
         nn.init.constant_(self.net[11].bias, 1)
 
     def forward(self, x):
-        #x = x.permute(0, 2, 1)
         x = torch.unsqueeze(x, dim=1)
         x = self.conv1(x)
         x = self.net(x)
