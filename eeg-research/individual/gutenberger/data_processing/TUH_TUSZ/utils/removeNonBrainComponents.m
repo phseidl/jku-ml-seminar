@@ -1,6 +1,6 @@
 function [EEG] = removeNonBrainComponents(EEG)
     
-    flag=zeros(56); % let component remain or remove
+    flag=zeros(size(EEG.icaweights,1)); % let component remain or remove
 
     data_projected = EEG.icaweights*EEG.icasphere*EEG.data;
     inv=EEG.icawinv;

@@ -1,4 +1,4 @@
-function process_TUH_data(startsub,stopsub,montage, dataRoot,saveroot, chanLocsPath, channels, removeSeiz, ica, saveArrays)
+function process_TUH_data(startsub,stopsub,montage, dataRoot,saveroot, chanLocsPath, channels, removeSeiz, ica, saveArrays, normalize, resamplingFreq)
 
 % process_TUH_data  Processes the TUSZ corpus of the TUH EEG dataset.
 %   Dataset available at https://isip.piconepress.com/projects/tuh_eeg/html/downloads.shtml
@@ -78,7 +78,8 @@ function process_TUH_data(startsub,stopsub,montage, dataRoot,saveroot, chanLocsP
                     edfPath = fullfile(pf, recnames.edfname{irec});
                     EEG_temp = pop_biosig(edfPath,'importevent','off','rmeventchan','off');
                     EEG_temp = removeChannels(channels,EEG_temp);   %remove unwanted channels
-                    
+                    EEG_temp = pop_resample( EEG_temp, resamplingFreq); % downsampling to "resamplingFreq" Hz
+
                     % rename channels to correspond to chanloc path (remove
                     % '-LE' or '-REF')
                     for i = 1 : EEG_temp.nbchan
@@ -127,18 +128,26 @@ function process_TUH_data(startsub,stopsub,montage, dataRoot,saveroot, chanLocsP
         if (saveArrays)
             save(string(saveroot) + '/arrays/' + saveFilename, 'data');
         end
-        mergeIndices = 1:1:size(EEG,1);
-        OUTEEG = pop_mergeset(EEG, mergeIndices, 0);
 
-        OUTEEG = pop_resample( OUTEEG, 128); % downsampling to 128Hz
+        mergeIndices = 1:1:size(EEG,1);
+     
+        OUTEEG = pop_mergeset(EEG, mergeIndices, 0);
         OUTEEG = eeg_checkset( OUTEEG );
         OUTEEG = pop_reref( OUTEEG, []); % re-reference by CAR
         OUTEEG = eeg_checkset( OUTEEG );
-        OUTEEG = pop_eegfiltnew(OUTEEG, 'locutoff',1,'hicutoff',50,'plotfreqz',1); % Band pass filter to 1-40 Hz
+        OUTEEG = pop_eegfiltnew(OUTEEG, 'locutoff',1,'hicutoff',50,'plotfreqz',1); % Band pass filter to 1-50 Hz
         OUTEEG = eeg_checkset( OUTEEG );
-
-
         OUTEEG = pop_chanedit(OUTEEG, 'lookup', chanLocsPath);
+
+        if (normalize)
+            data = OUTEEG.data;
+            % calc mean and standard deviation
+            mu = mean(data, 'all');
+            sigma = std(data, 0, 'all');
+            data_norm = (data-mu)/sigma;
+            OUTEEG = pop_editset(OUTEEG, 'data',  data_norm); 
+        end
+        
         
 	    OUTEEG = pop_saveset( OUTEEG, 'filename', char(saveFilenameSet),'filepath', [saveroot, '/original/']); % save data
 	

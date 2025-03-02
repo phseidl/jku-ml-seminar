@@ -1,0 +1,110 @@
+
+model_name: cleegn_tuh
+model_class: UPT4EEG
+save_path: null
+
+
+Hyperparameters:
+  epochs: 50
+  d_model: 384
+  dim: 192
+  num_heads: 4
+  depth: 3
+  batch_size: 32
+  lr: !!float 1e-4
+  optim_weight_decay: 0.05
+  linear_decay_end: !!float 1e-10
+  warmup_perc: 0.07
+  loss_fun: ensemble
+
+Dataset:
+  dataset: TUH
+  shuffle: true
+  x_basepath: /system/user/studentwork/gutenber/TUH_dataset_PROCESSED_new/original
+  y_basepath: /system/user/studentwork/gutenber/TUH_dataset_PROCESSED_new/ICA
+  x_fpath: Data_S{}.set
+  y_fpath: Data_S{}_ICA.set
+  use_montage: 'tuh'   #'tuh', 'random' or 'no_montage'
+  use_montage_val: 'tuh'
+  io_same: True
+  input_chs: 20
+  output_chs: 25
+  num_inputs: 2600
+  num_outputs: 3600
+  ch_dropout: 0.6
+  sfreq: 250.0
+  window_size: 1
+  stride: 1
+  n_chan: null
+  normalize: False
+  subjects_train:
+    - ["001"]
+    - ["003"]
+    - ["004"]
+    - ["005"]
+    - ["006"]
+    - ["007"]
+    - ["008"]
+    - ["009"]
+    - ["012"]
+    - ["013"]
+    - ["014"]
+    - ["015"]
+    - ["020"]
+    - ["021"]
+    - ["022"]
+    - ["023"]
+    - ["024"]
+    - ["025"]
+    - ["026"]
+    - ["027"]
+    - ["028"]
+    - ["029"]
+    - ["030"]
+    - ["031"]
+    - ["033"]
+    - ["034"]
+    - ["037"]
+    - ["038"]
+    - ["041"]
+    - ["042"]
+    - ["043"]
+    - ["044"]
+    - ["045"]
+    - ["046"]
+    - ["047"]
+    - ["048"]
+    - ["050"]
+    - ["051"]
+  subjects_val:
+    - ["010"]
+    - ["011"]
+    - ["060"]
+    - ["066"]
+    - ["140"]
+    - ["131"]
+    - ["197"]
+  subjects_test:
+    - ["016"]
+    - ["018"]
+    - ["019"]
+    - ["076"]
+    - ["052"]
+    - ["053"]
+    - ["056"]
+    - ["058"]
+    - ["059"]
+    - ["069"]
+    - ["070"]
+    - ["072"]
+    - ["074"]
+    - ["075"]
+    - ["078"]
+    - ["079"]
+    - ["080"]
+  ch_names: null
+  tmin: 200
+  tmax: max
+
+
+  
