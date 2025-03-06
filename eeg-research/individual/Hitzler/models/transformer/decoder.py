@@ -17,10 +17,10 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Optional, Tuple
 
-from individual.Hitzler.transformer.attention import MultiHeadAttention
-from individual.Hitzler.transformer.module import Linear, LayerNorm, PositionwiseFeedForward, Embedding, \
+from attention import MultiHeadAttention
+from module import Linear, LayerNorm, PositionwiseFeedForward, Embedding, \
     PositionalEncoding
-from individual.Hitzler.transformer.utils import (IGNORE_ID, get_attn_key_pad_mask, get_attn_pad_mask,
+from utils import (IGNORE_ID, get_attn_key_pad_mask, get_attn_pad_mask,
                    get_non_pad_mask, get_subsequent_mask, pad_list)
 
 

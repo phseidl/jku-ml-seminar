@@ -124,11 +124,7 @@ class EEGNet(nn.Module):
         return self.F2 * mock_eeg.shape[3]
 
     def forward(self, x: torch.Tensor):
-        #if self.args["enc_model"] == 'raw':
         x = x.unsqueeze(1)
-        #elif self.args["enc_model"] != 'raw':
-        #    x = self.feature_extractor[self.args["enc_model"]](x)
-        #    x = x.reshape(x.size(0), -1, x.size(3)).unsqueeze(1)
         x = self.block1(x)
         x = self.block2(x)
         x = x.flatten(start_dim=1)

@@ -1,13 +1,14 @@
-import argparse
 import os
+import argparse
 from datetime import datetime
 
 import mne.io
 import numpy as np
 from numpy import save
-
-from individual.Hitzler.utils import get_seizure_times
-
+from feature_extractor.psd import PSD_FEATURE2
+from feature_extractor.spectogram_feature import SPECTROGRAM_FEATURE_BINARY2
+from utils import get_seizure_times
+import torch
 
 def process_data(data_dir, save_location, channels, alternative_channel_names):
 
@@ -20,10 +21,8 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
     patients_path = [os.path.join(data_dir, f_) for f_ in patients]
     no_of_seizures = 0
     no_of_non_seizures = 0
-    # frequency bands for STFT
-    freqs = np.linspace(1, 50, 25)
-    # time bandwidth for STFT
-    time_bandwidth = 2.0
+    psd = PSD_FEATURE2()
+    stft2 = SPECTROGRAM_FEATURE_BINARY2()
     for iPatient in range(len(patients_path)):
         patient = patients_path[iPatient]
         # get list of sessions for patient
@@ -64,6 +63,8 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
                             eeg.pick(alternative_channel_names)
                     else:
                         eeg.pick(channels)
+
+                        # rename channels to standard names
                     # set measurement date to today if not set, otherwise error occurs
                     if eeg.info['meas_date'].year < 2000:
                         eeg.set_meas_date((datetime.today().timestamp(), 0))
@@ -71,11 +72,30 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
                     # if length of recording is less than 30s, skip
                     if eeg.times[-1] < 30:
                         continue
+
+                    mne.rename_channels(eeg.info, {ch: ch.replace('EEG ', '').replace('-LE', '').replace('-REF', '') for ch in eeg.info["ch_names"]})
+
+
+                    # calculate bipolar montages
+                    eeg = eeg.set_montage('standard_1020', match_case=False)
+
+
+                    # Apply the bipolar reference using mne.set_bipolar_reference
+                    anodes = ['FP1', 'F7', 'T3', 'T5', 'FP2', 'F8', 'T4', 'T6', 'T3', 'C3', 'CZ', 'C4', 'FP1', 'F3', 'C3', 'P3', 'FP2', 'F4', 'C4', 'P4']
+                    cathodes = ['F7', 'T3', 'T5', 'O1', 'F8', 'T4', 'T6', 'O2', 'C3', 'CZ', 'C4', 'T4', 'F3', 'C3', 'P3', 'O1', 'F4', 'C4', 'P4', 'O2']
+                    raw_bipolar = mne.set_bipolar_reference(eeg, anode=anodes, cathode=cathodes, drop_refs=True)
+                    # drop PZ and FZ channels
+                    raw_bipolar.drop_channels(['PZ', 'FZ'])
+
                     # create epochs of ~30s
                     epochs = mne.make_fixed_length_epochs(eeg, duration=30, preload=True)
                     # resample to 200Hz
                     epochs = epochs.resample(200)
                     epochs_data = epochs.get_data(copy=False)
+
+                    bipolar_epochs = mne.make_fixed_length_epochs(raw_bipolar, duration=30, preload=True)
+                    bipolar_epochs = bipolar_epochs.resample(200)
+                    bipolar_epochs_data = bipolar_epochs.get_data(copy=False)
 
                     # read csv_bi file containing start and stop times of seizures
                     csvPath = os.path.join(montage, csv_bins[irec])
@@ -113,22 +133,25 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
 
                     # calculate STFT for each interval and save each epoch + labels as a separate file
                     for i in range(len(labels_data_list)):
-                        epoch = epochs_data[i]
-                        power = mne.time_frequency.tfr_array_multitaper(
-                            epoch[np.newaxis, :, :], sfreq=epochs.info['sfreq'], freqs=freqs, time_bandwidth=time_bandwidth,
-                            output='power', n_jobs=3
-                        )  # Shape: (n_epochs, 19, len(freqs), 6000)
-
-                        features = np.mean(power, axis=2)
+                        bipolar_epoch = bipolar_epochs_data[i]
+                        bipolar_epoch = bipolar_epoch[np.newaxis, :, :]
+                        stft_features = stft2(torch.tensor(bipolar_epoch))
+                        stft_features = stft_features.reshape(stft_features.size(0), -1, stft_features.size(3)).unsqueeze(1)
+                        psd_features = psd(torch.tensor(bipolar_epoch))
+                        psd_features = psd_features.reshape(psd_features.size(0), -1, psd_features.size(3)).unsqueeze(1)
                         patient_name = patient.split('/')[-1].split("\\")[-1]
                         saveFilename = 'DataArray_Patient_'+ str(patient_name)+ "_" + str(iPatient).zfill(3) + "_Session" + str(iSession).zfill(
                             3) + "_Rec" + str(irec).zfill(3) + "_Split" + str(i).zfill(3)
                         # save labels to labels folder
                         save(os.path.join(save_location, 'labels', saveFilename + ".labels"), labels_data_list[i])
                         # save epochs to edf folder
-                        epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-epo.fif"), overwrite=True)
-                        # save spectogram to edf folder
-                        np.save(os.path.join(save_location, 'edf', saveFilename + "-stft.npy"), np.squeeze(features))
+                        epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-unipolar-epo.fif"), overwrite=True)
+                        # save bipolar epochs to edf folder
+                        bipolar_epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-bipolar-epo.fif"), overwrite=True)
+                        # save stft features to edf folder
+                        np.save(os.path.join(save_location, 'edf', saveFilename + "-stft.npy"), np.squeeze(stft_features, axis=0))
+                        # save psd to edf folder
+                        np.save(os.path.join(save_location, 'edf', saveFilename + "-psd.npy"), np.squeeze(psd_features, axis=0))
     print('Number of seizures: ', no_of_seizures)
     print('Number of non-seizures: ', no_of_non_seizures)
 
@@ -142,9 +165,9 @@ if __name__ == '__main__':
     # alternative channels
     parser.add_argument('--alternative_channel_names', type=str, default='EEG FP1-LE, EEG FP2-LE, EEG F3-LE, EEG F4-LE, EEG C3-LE, EEG C4-LE, EEG P3-LE, EEG P4-LE, EEG O1-LE, EEG O2-LE, EEG F7-LE, EEG F8-LE, EEG T3-LE, EEG T4-LE, EEG T5-LE, EEG T6-LE, EEG CZ-LE, EEG PZ-LE, EEG FZ-LE')
     args = parser.parse_args()
-    data_dir = args["data_dir"] #'C:/Users/FlorianHitzler/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/raw/dev'
-    save_location = args["save_location"] #'C:/Users/FlorianHitzler/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/processed/dev'
-    channels = [channel for channel in args["channels"].split(',')]
+    data_dir = args["data_dir"] #'C:/Users/fh430/Documents/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/raw/dev'
+    save_location = args["save_location"] #'C:/Users/fh430/Documents/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/processed/dev'
+    channels = [channel.strip() for channel in args.channels.split(',')]
     # alternative channels
-    alternative_channel_names = [channel for channel in args["alternative_channel_names"].split(',')]
+    alternative_channel_names = [channel.strip() for channel in args.alternative_channel_names.split(',')]
     process_data(data_dir, save_location, channels, alternative_channel_names)
