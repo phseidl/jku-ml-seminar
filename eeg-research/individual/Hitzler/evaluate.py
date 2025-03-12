@@ -11,8 +11,16 @@ from models.cnn1d_blstm import CNN1D_BLSTM
 from models.densenet import DenseNet
 from models.eegnet_pytorch import EEGNet
 from models.mobilenet_lstm import MobileNet_LSTM
+from models.resnet import RESNET18_CONV2D
 from models.resnet_dilation_lstm import Resnet_Dialation_LSTM
 from models.resnet_lstm import ResNet_LSTM
+from models.vgg import VGG16
+from models.alexnet import AlexNet
+from models.chrononet import ChronoNet
+from models.mobilenet import MobileNetV3
+from models.tdnn_lstm import TDNN_LSTM
+from models.transformer.feature_transformer import FT
+from models.transformer.guided_feature_transformer import GFT
 from utils import read_json
 from torch.utils.tensorboard import SummaryWriter
 
@@ -28,8 +36,13 @@ MODEL_DICT = {
     "Resnet_Dialation_LSTM": Resnet_Dialation_LSTM,
     "ResNet_LSTM": ResNet_LSTM,
     "CNN2D_BLSTM": CNN2D_BLSTM,
-    "CNN1D_BLSTM": CNN1D_BLSTM
-
+    "CNN1D_BLSTM": CNN1D_BLSTM,
+    "ResNet": RESNET18_CONV2D,
+    "VGG": VGG16,
+    "MobileNetV3": MobileNetV3,
+    "TDNN_LSTM": TDNN_LSTM,
+    "FeatureTransformer": FT,
+    "GuidedFeatureTransformer": GFT
 }
 
 if __name__ == "__main__":
