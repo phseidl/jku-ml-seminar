@@ -1,11 +1,14 @@
 import torch
 from lightning import seed_everything
 from torch.utils import data
+from torch.utils.data import WeightedRandomSampler
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 from EEGDataset import EEGDataset
-from torch.utils.tensorboard import SummaryWriter
-
 from EEGTrainer import EEGTrainer
+from models.transformer.feature_transformer import FT
+from models.transformer.guided_feature_transformer import GFT
 from models.alexnet import AlexNet
 from models.chrononet import ChronoNet
 from models.cnn1d_blstm import CNN1D_BLSTM
@@ -19,17 +22,38 @@ from models.mobilenet_lstm import MobileNet_LSTM
 from models.resnet import RESNET18_CONV2D
 from models.resnet_dilation_lstm import Resnet_Dialation_LSTM
 from models.resnet_lstm import ResNet_LSTM
-from models.transformer.feature_transformer import FT
-from models.transformer.guided_feature_transformer import GFT
-from models.vgg import VGG16
 from models.tdnn_lstm import TDNN_LSTM
-from utils import read_json, check_balance_of_dataset, compute_mean_std
-
-
-from tqdm import tqdm
-from torch.utils.data import WeightedRandomSampler
+from models.vgg import VGG16
+from utils import read_json, check_balance_of_dataset
 
 torch.set_float32_matmul_precision('medium')
+
+# dictionary to map model name to model class
+MODEL_DICT = {
+    "EEGNet": EEGNet,
+    "AlexNet": AlexNet,
+    "ChronoNet": ChronoNet,
+    "CNN2D_LSTM": CNN2D_LSTM,
+    "CNN1D_LSTM": CNN1D_LSTM,
+    "DenseNet": DenseNet,
+    "MobileNet_LSTM": MobileNet_LSTM,
+    "Resnet_Dialation_LSTM": Resnet_Dialation_LSTM,
+    "ResNet_LSTM": ResNet_LSTM,
+    "CNN2D_BLSTM": CNN2D_BLSTM,
+    "CNN1D_BLSTM": CNN1D_BLSTM,
+    "ResNet": RESNET18_CONV2D,
+    "MobileNetV3": MobileNetV3,
+    "TDNN_LSTM": TDNN_LSTM,
+    "VGG": VGG16,
+    "FeatureTransformer": FT,
+    "GuidedFeatureTransformer": GFT
+}
+
+def convert_string_to_model(model_name, config, device):
+    if model_name in MODEL_DICT:
+        return MODEL_DICT[model_name](config, device)
+    else:
+        raise ValueError(f"Model {model_name} not found")
 
 if __name__ == "__main__":
     seed_everything(42, workers=True)
@@ -73,24 +97,11 @@ if __name__ == "__main__":
 
     device = torch.device(config["device"] if torch.cuda.is_available() else "cpu")
 
-    cnn1d = CNN1D_LSTM(config, device)
-    bcnn1d = CNN1D_BLSTM(config, device)
-    bcnn2d = CNN2D_BLSTM(config, device)
-    cnn2d = CNN2D_LSTM(config, device)
-    resnet2d = RESNET18_CONV2D(config, device)
-    alexnet = AlexNet(config, device)
-    mobilenet = MobileNetV3(config, device)
-    guided_transformer = GFT(config, device)
-    vgg = VGG16(config, device)
-    eegnet = EEGNet(config, device)
-    chrononet = ChronoNet(config, device)
-    densenet = DenseNet(config, device)
-    mobilenet_lstm = MobileNet_LSTM(config, device)
-    resnet_dialation_lstm = Resnet_Dialation_LSTM(config, device)
-    transformer = FT(config, device)
-    tdnn_lstm = TDNN_LSTM(config, device)
-    resnet_lstm = ResNet_LSTM(config, device)
-    for model in [bcnn1d]:
+    models = train["models_to_train"]
+
+    for model_class in models:
+        model = convert_string_to_model(model_class, config, device)
+        print(f"Training {model.__class__.__name__}...")
         writer = SummaryWriter(log_dir=f"{results_path}/{model.__class__.__name__}")
         trainer = EEGTrainer(model, config, device, trainloader, valloader, writer)
         trainer.train_sliding_window()

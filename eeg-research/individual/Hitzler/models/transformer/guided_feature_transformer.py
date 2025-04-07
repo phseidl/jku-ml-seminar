@@ -13,8 +13,8 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-from encoder import TransformerEncoder
-from module import PositionalEncoding
+from models.transformer.encoder import TransformerEncoder
+from models.transformer.module import PositionalEncoding
 
 
 class GFT(nn.Module):
@@ -79,7 +79,7 @@ class GFT(nn.Module):
             n_head=4,
             d_model=enc_model_dim,
             d_ff=enc_model_dim * 4,
-            dropout=0.0,
+            dropout=self.args["dropout"],
             pe_maxlen=500,
             use_pe=False,
             block_mask=block_mask
