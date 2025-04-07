@@ -239,7 +239,7 @@ class MobileNetV3(nn.Module):
         self.fc1 = nn.Linear(exp_size, output_channel)
         self.classifier = nn.Sequential(
             h_swish(),
-            nn.Dropout(0.2),
+            nn.Dropout(self.args["dropout"]),
             nn.Linear(output_channel, self.num_classes),
         )
 

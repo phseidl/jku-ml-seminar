@@ -40,7 +40,7 @@ class AlexNet(nn.Module):
 
         self.classifier = nn.Sequential(
             nn.ReLU(),
-            nn.Dropout(),
+            nn.Dropout(self.args["dropout"]),
             nn.Linear(in_feature // 2, in_feature // 2),
             nn.ReLU(),
             nn.Linear(in_feature // 2, 1),

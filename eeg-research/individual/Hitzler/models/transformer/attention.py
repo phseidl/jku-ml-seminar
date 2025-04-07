@@ -19,7 +19,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from typing import Tuple, Optional, Any
 
-from module import Linear
+from models.transformer.module import Linear
 
 
 class AdditiveAttention(nn.Module):

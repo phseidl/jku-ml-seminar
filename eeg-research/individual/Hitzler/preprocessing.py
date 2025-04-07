@@ -1,14 +1,14 @@
-import os
 import argparse
+import os
 from datetime import datetime
 
 import mne.io
 import numpy as np
-from numpy import save
-from feature_extractor.psd import PSD_FEATURE2
-from feature_extractor.spectogram_feature import SPECTROGRAM_FEATURE_BINARY2
-from utils import get_seizure_times
 import torch
+from numpy import save
+
+from utils import get_seizure_times
+
 
 def process_data(data_dir, save_location, channels, alternative_channel_names):
 
@@ -21,8 +21,6 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
     patients_path = [os.path.join(data_dir, f_) for f_ in patients]
     no_of_seizures = 0
     no_of_non_seizures = 0
-    psd = PSD_FEATURE2()
-    stft2 = SPECTROGRAM_FEATURE_BINARY2()
     for iPatient in range(len(patients_path)):
         patient = patients_path[iPatient]
         # get list of sessions for patient
@@ -131,14 +129,9 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
                             no_of_seizures += 1
                         labels_data_list.append(labels[start_index:end_index])
 
-                    # calculate STFT for each interval and save each epoch + labels as a separate file
                     for i in range(len(labels_data_list)):
                         bipolar_epoch = bipolar_epochs_data[i]
                         bipolar_epoch = bipolar_epoch[np.newaxis, :, :]
-                        stft_features = stft2(torch.tensor(bipolar_epoch))
-                        stft_features = stft_features.reshape(stft_features.size(0), -1, stft_features.size(3)).unsqueeze(1)
-                        psd_features = psd(torch.tensor(bipolar_epoch))
-                        psd_features = psd_features.reshape(psd_features.size(0), -1, psd_features.size(3)).unsqueeze(1)
                         patient_name = patient.split('/')[-1].split("\\")[-1]
                         saveFilename = 'DataArray_Patient_'+ str(patient_name)+ "_" + str(iPatient).zfill(3) + "_Session" + str(iSession).zfill(
                             3) + "_Rec" + str(irec).zfill(3) + "_Split" + str(i).zfill(3)
@@ -148,10 +141,6 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
                         epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-unipolar-epo.fif"), overwrite=True)
                         # save bipolar epochs to edf folder
                         bipolar_epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-bipolar-epo.fif"), overwrite=True)
-                        # save stft features to edf folder
-                        np.save(os.path.join(save_location, 'edf', saveFilename + "-stft.npy"), np.squeeze(stft_features, axis=0))
-                        # save psd to edf folder
-                        np.save(os.path.join(save_location, 'edf', saveFilename + "-psd.npy"), np.squeeze(psd_features, axis=0))
     print('Number of seizures: ', no_of_seizures)
     print('Number of non-seizures: ', no_of_non_seizures)
 
@@ -165,8 +154,8 @@ if __name__ == '__main__':
     # alternative channels
     parser.add_argument('--alternative_channel_names', type=str, default='EEG FP1-LE, EEG FP2-LE, EEG F3-LE, EEG F4-LE, EEG C3-LE, EEG C4-LE, EEG P3-LE, EEG P4-LE, EEG O1-LE, EEG O2-LE, EEG F7-LE, EEG F8-LE, EEG T3-LE, EEG T4-LE, EEG T5-LE, EEG T6-LE, EEG CZ-LE, EEG PZ-LE, EEG FZ-LE')
     args = parser.parse_args()
-    data_dir = args["data_dir"] #'C:/Users/fh430/Documents/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/raw/dev'
-    save_location = args["save_location"] #'C:/Users/fh430/Documents/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/processed/dev'
+    data_dir = args.data_dir #'C:/Users/fh430/Documents/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/raw/dev'
+    save_location = args.save_location #'C:/Users/fh430/Documents/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/processed/dev'
     channels = [channel.strip() for channel in args.channels.split(',')]
     # alternative channels
     alternative_channel_names = [channel.strip() for channel in args.alternative_channel_names.split(',')]

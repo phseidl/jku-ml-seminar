@@ -14,8 +14,8 @@
 import torch.nn as nn
 from torch import Tensor
 from typing import Tuple
-from attention import MultiHeadAttention
-from module import PositionalEncoding, PositionwiseFeedForward, LayerNorm
+from models.transformer.attention import MultiHeadAttention
+from models.transformer.module import PositionalEncoding, PositionwiseFeedForward, LayerNorm
 
 
 class TransformerEncoderLayer(nn.Module):

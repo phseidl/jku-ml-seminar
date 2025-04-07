@@ -104,7 +104,7 @@ class FT(nn.Module):
             n_head=4,
             d_model=enc_model_dim,
             d_ff=enc_model_dim * 4,
-            dropout=0.1,
+            dropout=self.args["dropout"],
             pe_maxlen=500,
             use_pe=False,
             block_mask=None)

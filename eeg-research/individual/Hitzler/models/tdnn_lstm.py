@@ -99,13 +99,13 @@ class TDNN_LSTM(nn.Module):
             hidden_size=128,
             num_layers=2,
             batch_first=True,
-            dropout=0.1,
+            dropout=self.args["dropout"],
             proj_size=0)
 
         self.classifier = nn.Sequential(
             nn.Linear(in_features=128, out_features=32, bias=True),
             nn.Sigmoid(),
-            nn.Dropout(0.2),
+            nn.Dropout(self.args["dropout"]),
             nn.Linear(in_features=32, out_features=32, bias=True),
             nn.Sigmoid(),
             nn.Linear(in_features=32, out_features=1, bias=True)
