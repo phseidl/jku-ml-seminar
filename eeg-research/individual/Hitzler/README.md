@@ -74,17 +74,17 @@ The sections should be read in order, as the preprocessing step is required befo
 The preprocessing script is used to preprocess the data.
 
 ```
-python preprocess.py --data_path <path_to_data> --save_location <save_location> --channels <channel1, channel2> --alternative_channel_names <alternative_channel1, alternative_channel2>
+python preprocessing.py --data_dir <path_to_data> --save_location <save_location> --channels <channel1, channel2> --alternative_channel_names <alternative_channel1, alternative_channel2>
 ```
 
-The `--data_path` argument specifies the path to the data directory. 
+The `--data_dir` argument specifies the path to the data directory. 
 The `--save_location` argument specifies the location where the preprocessed data should be saved. 
 The `--channels` argument specifies the channels to use for preprocessing. All the channel names have to be present in the data.
 The `--alternative_channel_names` argument specifies the alternative channel names to use if the first set of channels don't exist.
 
 Here is an example of how to run the preprocessing script:
 ```
-python preprocess.py --data_path /path/to/data --save_location /path/to/save/location --channels C3, C4, C5, C6 --alternative_channel_names C3A, C4A, C5A, C6A
+python preprocessing.py --data_dir 'data/TUH/2.0.3/raw/dev' --save_location 'data/TUH/2.0.3/processed/dev' --channels 'EEG FP1-REF, EEG FP2-REF, EEG F3-REF, EEG F4-REF, EEG C3-REF, EEG C4-REF, EEG P3-REF, EEG P4-REF, EEG O1-REF, EEG O2-REF, EEG F7-REF, EEG F8-REF, EEG T3-REF, EEG T4-REF, EEG T5-REF, EEG T6-REF, EEG CZ-REF, EEG PZ-REF, EEG FZ-REF' --alternative_channel_names 'EEG FP1-LE, EEG FP2-LE, EEG F3-LE, EEG F4-LE, EEG C3-LE, EEG C4-LE, EEG P3-LE, EEG P4-LE, EEG O1-LE, EEG O2-LE, EEG F7-LE, EEG F8-LE, EEG T3-LE, EEG T4-LE, EEG T5-LE, EEG T6-LE, EEG CZ-LE, EEG PZ-LE, EEG FZ-LE'
 ```
 
 

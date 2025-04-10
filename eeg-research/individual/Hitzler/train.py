@@ -1,5 +1,5 @@
+import numpy as np
 import torch
-from lightning import seed_everything
 from torch.utils import data
 from torch.utils.data import WeightedRandomSampler
 from torch.utils.tensorboard import SummaryWriter
@@ -7,8 +7,6 @@ from tqdm import tqdm
 
 from EEGDataset import EEGDataset
 from EEGTrainer import EEGTrainer
-from models.transformer.feature_transformer import FT
-from models.transformer.guided_feature_transformer import GFT
 from models.alexnet import AlexNet
 from models.chrononet import ChronoNet
 from models.cnn1d_blstm import CNN1D_BLSTM
@@ -23,6 +21,8 @@ from models.resnet import RESNET18_CONV2D
 from models.resnet_dilation_lstm import Resnet_Dialation_LSTM
 from models.resnet_lstm import ResNet_LSTM
 from models.tdnn_lstm import TDNN_LSTM
+from models.transformer.feature_transformer import FT
+from models.transformer.guided_feature_transformer import GFT
 from models.vgg import VGG16
 from utils import read_json, check_balance_of_dataset
 
@@ -56,7 +56,9 @@ def convert_string_to_model(model_name, config, device):
         raise ValueError(f"Model {model_name} not found")
 
 if __name__ == "__main__":
-    seed_everything(42, workers=True)
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+    np.random.seed(42)
     # read the configuration files
     config = read_json('configs/config.json')
     train = read_json('configs/train.json')

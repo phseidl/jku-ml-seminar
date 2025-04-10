@@ -12,8 +12,8 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-from individual.Hitzler.feature_extractor.psd import PSD_FEATURE2
-from individual.Hitzler.feature_extractor.spectogram_feature import SPECTROGRAM_FEATURE_BINARY2
+from feature_extractor.psd import PSD_FEATURE2
+from feature_extractor.spectogram_feature import SPECTROGRAM_FEATURE_BINARY2
 
 
 class CNN2D_LSTM(nn.Module):

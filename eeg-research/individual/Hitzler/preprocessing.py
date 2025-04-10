@@ -4,7 +4,6 @@ from datetime import datetime
 
 import mne.io
 import numpy as np
-import torch
 from numpy import save
 
 from utils import get_seizure_times
@@ -154,8 +153,8 @@ if __name__ == '__main__':
     # alternative channels
     parser.add_argument('--alternative_channel_names', type=str, default='EEG FP1-LE, EEG FP2-LE, EEG F3-LE, EEG F4-LE, EEG C3-LE, EEG C4-LE, EEG P3-LE, EEG P4-LE, EEG O1-LE, EEG O2-LE, EEG F7-LE, EEG F8-LE, EEG T3-LE, EEG T4-LE, EEG T5-LE, EEG T6-LE, EEG CZ-LE, EEG PZ-LE, EEG FZ-LE')
     args = parser.parse_args()
-    data_dir = args.data_dir #'C:/Users/fh430/Documents/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/raw/dev'
-    save_location = args.save_location #'C:/Users/fh430/Documents/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/processed/dev'
+    data_dir = args.data_dir
+    save_location = args.save_location
     channels = [channel.strip() for channel in args.channels.split(',')]
     # alternative channels
     alternative_channel_names = [channel.strip() for channel in args.alternative_channel_names.split(',')]
