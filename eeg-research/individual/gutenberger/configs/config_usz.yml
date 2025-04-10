@@ -1,0 +1,44 @@
+model_name: model_usz
+model_class: UPT4EEG
+save_path: null
+
+
+Hyperparameters:
+  epochs: 100
+  d_model: 384
+  dim: 192
+  num_heads: 4
+  depth: 3
+  batch_size: 32
+  lr: !!float 1e-4
+  optim_weight_decay: 0.05
+  linear_decay_end: !!float 1e-10
+  warmup_perc: 0.07
+
+Dataset:
+  dataset: USZ
+  shuffle: true
+  dataset_dir: /system/user/studentwork/gutenber/USZ/USZ
+  x_fpath: Data_S{}.set
+  y_fpath: Data_S{}_ICA.set
+  use_montage: 'random'   #'tuh', 'random' or 'no_montage'
+  use_montage_val: 'tuh'
+  io_same: True
+  input_chs: 20
+  output_chs: 25
+  num_inputs: 2600
+  num_outputs: 3600
+  ch_dropout: null
+  sfreq: 200.0
+  window_size: 1
+  stride: 1
+  n_chan: null
+  normalize: True
+  ch_names: null
+  tmin: 200
+  tmax: max
+  subjects_train: null
+  subjects_val: null
+
+
+  

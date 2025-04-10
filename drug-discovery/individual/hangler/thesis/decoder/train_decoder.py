@@ -10,7 +10,6 @@ from pytorch_lightning.strategies import DDPStrategy
 from pytorch_lightning.loggers import CSVLogger
 #from pytorch_lightning.profiler import PyTorchProfiler
 
-
 from decoder.vocab import Vocabulary
 from decoder.data_module import MoleculeDataModule
 from decoder.decoder_xbert import XbertDecoder
@@ -37,7 +36,7 @@ if __name__ == "__main__":
     # ---------------------------
     # Create DataModule
     max_length = 152 # maximum length of tokenized SMILES + 3 for <sos>, <eos>, and padding
-    batch_size = 128
+    batch_size = 256 # 128
 
     dm = MoleculeDataModule(
         vocab=vocab,
@@ -46,7 +45,7 @@ if __name__ == "__main__":
         max_length=max_length,
         batch_size=batch_size,
         num_workers=8,  # tune this
-        max_dataset_size=200
+        max_dataset_size=100000
     ) # emb_tensor, input_ids, target_ids
 
     dm.setup()
@@ -77,25 +76,24 @@ if __name__ == "__main__":
         vocab = vocab
     )
 
-    pl_logger = CSVLogger(save_dir="lightning_logs/")
-
     # ---------------------------
     # Checkpoints and Trainer
     checkpoint_dir = "checkpoints/"
+    pl_logger = CSVLogger(save_dir="lightning_logs/")
+
+    # Custom Checkpoint Callback to Save Every 20 Steps
     checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_dir,
-        filename="decoder-{epoch:02d}-{val_loss:.4f}",
-        save_top_k=3,
-        every_n_epochs=1,
-        monitor="val_loss",
-        mode="min",
-        save_last=True
+        filename="decoder-{step:06d}-{val_loss:.4f}",
+        save_top_k=-1,  # Save all checkpoints
+        every_n_train_steps=50,  # Save every 20 training steps
+        monitor=None,  # No validation metric monitoring for step-based saving
     )
 
-    # Add Learning Rate Monitor
+    # Learning Rate Monitor Callback
     lr_monitor = LearningRateMonitor(logging_interval="step")
 
-    # Check for the latest checkpoint
+    # Resume from Last Checkpoint
     if os.path.exists(checkpoint_dir):
         last_checkpoint = None
         checkpoints = [f for f in os.listdir(checkpoint_dir) if f.endswith(".ckpt")]
@@ -104,25 +102,27 @@ if __name__ == "__main__":
                 [os.path.join(checkpoint_dir, ckpt) for ckpt in checkpoints],
                 key=os.path.getctime
             )
-            logger.info(f"Resuming from the latest checkpoint: {last_checkpoint}")
+            print(f"Resuming from the latest checkpoint: {last_checkpoint}")
         else:
-            logger.info("No checkpoint found. Starting training from scratch.")
+            print("No checkpoint found. Starting training from scratch.")
     else:
         last_checkpoint = None
-        logger.info("Checkpoint directory does not exist. Starting training from scratch.")
+        print("Checkpoint directory does not exist. Starting training from scratch.")
 
-
+    # Trainer with Step-Based Validation and Checkpoint Intervals
     trainer = pl.Trainer(
         profiler="simple",
-        max_epochs=200,
+        max_epochs=5,  # Total number of epochs
         devices=1,
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
-        strategy="auto" if torch.cuda.device_count() <= 1 else DDPStrategy(find_unused_parameters=False),
-        callbacks=[checkpoint_callback, lr_monitor],
+        strategy="auto" if torch.cuda.device_count() <= 1 else "ddp",
+        callbacks=[
+            checkpoint_callback,
+            lr_monitor,
+        ],
         precision="16-mixed",  # Enable mixed precision for faster training
-        #accumulate_grad_batches=4,
         logger=pl_logger,
-        log_every_n_steps=1000
+        val_check_interval=50,  # Validate every 20 steps
     )
 
     # ---------------------------

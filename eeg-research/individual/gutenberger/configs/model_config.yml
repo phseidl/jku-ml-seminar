@@ -1,0 +1,31 @@
+#CLEEGN hyperparameter
+CLEEGN:
+  learning_rate: 0.001
+  batch_size: 64
+  n_chan: 20
+  N_F: 20   #model parameter, equal to channel number
+  sfreq: 250
+  scheduler: 
+    type: ExponentialLR
+    gamma: 0.8
+
+#IC_U_Net hyperparameter
+IC_U_Net:
+  learning_rate: 0.01
+  batch_size: 128
+  n_chan: 20
+  bilinear: False
+  optimizer: SGD
+  scheduler: 
+    type: MultiStepLR
+    milestones: [50, 100, 125, 140]
+    gamma: 0.1
+
+#OneD_Res_CNN hyperparameter
+OneD_Res_CNN:
+  learning_rate: 0.001
+  batch_size: 1
+  n_chan: 20
+  scheduler:
+    type: None
+

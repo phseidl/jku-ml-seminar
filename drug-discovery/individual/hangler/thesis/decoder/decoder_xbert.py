@@ -52,8 +52,8 @@ class XbertDecoder(pl.LightningModule):
         
         self.warmup_steps = config['schedular']['warmup_epochs']
 
-        # 3) Loss function (sum reduction can be OK, but often "mean" is used)
-        self.criterion = nn.CrossEntropyLoss(ignore_index=self.pad_idx, reduction='sum')
+        # 3) Loss function
+        self.criterion = nn.CrossEntropyLoss(ignore_index=self.pad_idx, reduction='mean')
 
     def forward(self, context_embeddings, input_ids, attention_mask=None):
         """
@@ -72,6 +72,9 @@ class XbertDecoder(pl.LightningModule):
         # Expand context to [batch_size, seq_len, final_dim]
         batch_size, seq_len = input_ids.shape
         encoder_hidden_states = context_embeddings.unsqueeze(1).expand(-1, seq_len, -1)
+        print("context_embeddings: ", context_embeddings.shape)
+        print("encoder_hidden_states: ", encoder_hidden_states.shape)
+
 
         # Forward pass through BERT. Return logits for next-token prediction.
         outputs = self.model(
@@ -93,8 +96,8 @@ class XbertDecoder(pl.LightningModule):
         (e.g. input_ids = tokens[:-1], target_ids = tokens[1:]).
         """
         optimizer = self.optimizers()
-        scheduler = self.lr_schedulers()
-        optimizer.zero_grad()
+        #scheduler = self.lr_schedulers()
+        #optimizer.zero_grad()
 
         # batch has format: emb_tensor, input_ids, target_ids
         context_embeddings, input_ids, target_ids = batch
@@ -131,6 +134,14 @@ class XbertDecoder(pl.LightningModule):
         self.log("train_loss", loss, prog_bar=True)
         self.log("train_acc", acc, prog_bar=True)
 
+        if self.global_step % 50 == 0:
+            # ---- Free-decoding metrics ----
+            exact_match_acc, tokenwise_acc = self.compare_free_decode_to_groundtruth(
+                context_embeddings, target_ids, f'Epoch: {self.current_epoch}, Step: {self.global_step} - Train'
+            )
+            self.log("train_acc_free_exact", exact_match_acc, prog_bar=True)
+            self.log("train_acc_free_tokenwise", tokenwise_acc, prog_bar=True)
+
         # step_size = 100
         # warmup_iterations = self.warmup_steps * step_size
         # if self.current_epoch > 0 and batch_idx == 0:
@@ -142,40 +153,40 @@ class XbertDecoder(pl.LightningModule):
         
         return loss
 
-    def on_train_epoch_end(self):
-        # 1) Log the teacher-forced loss as before
-        # tmp = torch.stack(self.training_step_outputs[-1000:]).mean(dim=0).tolist()
-        # if self.global_rank == 0:
-        #     print(f'\n mean loss: {tmp[0]:.4f}')
-        # self.training_step_outputs.clear()
+    # def on_train_epoch_end(self):
+    #     # 1) Log the teacher-forced loss as before
+    #     # tmp = torch.stack(self.training_step_outputs[-1000:]).mean(dim=0).tolist()
+    #     # if self.global_rank == 0:
+    #     #     print(f'\n mean loss: {tmp[0]:.4f}')
+    #     # self.training_step_outputs.clear()
 
-        # 2) Check free-decoding accuracy on a small training subset
-        #    (We do this on rank zero only to avoid duplication in multi-GPU)
-        if self.global_rank == 0:
-            train_loader = self.trainer.datamodule.train_dataloader()
-            # fetch a single mini-batch
-            try:
-                batch = next(iter(train_loader))
-            except StopIteration:
-                # if the dataloader is empty, skip
-                return
+    #     # 2) Check free-decoding accuracy on a small training subset
+    #     #    (We do this on rank zero only to avoid duplication in multi-GPU)
+    #     if self.global_rank == 0:
+    #         train_loader = self.trainer.datamodule.train_dataloader()
+    #         # fetch a single mini-batch
+    #         try:
+    #             batch = next(iter(train_loader))
+    #         except StopIteration:
+    #             # if the dataloader is empty, skip
+    #             return
 
-            # Move batch to the same device as the model
-            context_embeddings, input_ids, target_ids = [
-                x.to(self.device) for x in batch
-            ]
+    #         # Move batch to the same device as the model
+    #         context_embeddings, input_ids, target_ids = [
+    #             x.to(self.device) for x in batch
+    #         ]
 
-            # Optionally limit to a small subset of the batch, e.g. first 8 samples
-            subset_size = min(8, context_embeddings.size(0))
-            context_embeddings = context_embeddings[:subset_size]
-            input_ids = input_ids[:subset_size]
-            target_ids = target_ids[:subset_size]
+    #         # Optionally limit to a small subset of the batch, e.g. first 8 samples
+    #         subset_size = min(8, context_embeddings.size(0))
+    #         context_embeddings = context_embeddings[:subset_size]
+    #         input_ids = input_ids[:subset_size]
+    #         target_ids = target_ids[:subset_size]
 
-            # 3) Run free decoding
-            free_acc = self.compare_free_decode_to_groundtruth(context_embeddings, target_ids)
+    #         # 3) Run free decoding
+    #         free_acc = self.compare_free_decode_to_groundtruth(context_embeddings, target_ids)
 
-            # 4) Log the free-decoding accuracy on the train set
-            self.log("train_acc_free_decode", free_acc, prog_bar=True)
+    #         # 4) Log the free-decoding accuracy on the train set
+    #         self.log("train_acc_free_decode", free_acc, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         context_embeddings, input_ids, target_ids = batch
@@ -194,10 +205,13 @@ class XbertDecoder(pl.LightningModule):
         self.log("val_loss", loss, prog_bar=True)
         self.log("val_acc_teacher_forced", acc, prog_bar=True)
 
-         # ---- Free-decoding metrics ----
-        # We decode from embeddings alone & compare to target_ids
-        free_acc = self.compare_free_decode_to_groundtruth(context_embeddings, target_ids)
-        self.log("val_acc_free_decode", free_acc, prog_bar=True)
+        if self.global_step % 50 == 0:
+            # ---- Free-decoding metrics ----
+            exact_match_acc, tokenwise_acc = self.compare_free_decode_to_groundtruth(
+                context_embeddings, target_ids, f'Epoch: {self.current_epoch}, Step: {self.global_step} - Valid'
+            )
+            self.log("val_acc_free_exact", exact_match_acc, prog_bar=True)
+            self.log("val_acc_free_tokenwise", tokenwise_acc, prog_bar=True)
 
         return loss
 
@@ -217,8 +231,12 @@ class XbertDecoder(pl.LightningModule):
         self.log("test_loss", loss, prog_bar=True)
         self.log("test_acc_teacher_forced", acc, prog_bar=True)
 
-        free_acc = self.compare_free_decode_to_groundtruth(context_embeddings, target_ids)
-        self.log("test_acc_free_decode", free_acc, prog_bar=True)
+        if self.global_step % 50 == 0:
+            exact_match_acc, tokenwise_acc = self.compare_free_decode_to_groundtruth(
+                context_embeddings, target_ids, f'Epoch: {self.current_epoch}, Step: {self.global_step} - Test'
+            )
+            self.log("test_acc_free_exact", exact_match_acc, prog_bar=True)
+            self.log("test_acc_free_tokenwise", tokenwise_acc, prog_bar=True)
 
         return loss
 
@@ -245,11 +263,11 @@ class XbertDecoder(pl.LightningModule):
     #def lr_scheduler_step(self, scheduler, optimizer_idx, metric):
     #    print('qqq', metric)
 
-        ###########################
+    ###########################
     # FREE DECODING FUNCTIONS #
     ###########################
     @torch.no_grad()
-    def greedy_decode_batch(self, context_embeddings, max_length=150):
+    def greedy_decode_batch(self, context_embeddings, max_length=157):
         """
         Greedily decode a batch of embeddings into SMILES tokens (no teacher forcing).
         
@@ -315,63 +333,83 @@ class XbertDecoder(pl.LightningModule):
             # find the first <eos> if it exists
             if end_idx in seq:
                 eos_pos = seq.index(end_idx)
-                seq = seq[:eos_pos+1]  # keep <eos> or cut it, up to you
+                seq = seq[:eos_pos+1]  # keep <eos>
             final_sequences.append(seq)
         return final_sequences
 
-    def compare_free_decode_to_groundtruth(self, context_embeddings, target_ids):
+    def compare_free_decode_to_groundtruth(self, context_embeddings, target_ids, text):
         """
         Decodes each sample from 'context_embeddings' (free decoding),
         compares to 'target_ids' (the ground truth tokens).
 
-        For accuracy, we do an exact match comparison at the token level
-        (excluding <pad> and ignoring length differences for now).
+        We compute:
+        1) An exact match accuracy for entire sequences (pred_ids[1:] == gt_ids).
+        2) A tokenwise correctness score, i.e., how many tokens match
+            out of the total tokens, across all samples.
 
-        We also print out a few samples of predicted vs. ground truth
-        SMILES strings for inspection.
+        Results are appended to a text file (20240111_100k_decodeded_smiles.txt),
+        with a heading derived from 'text'.
         """
         device = context_embeddings.device
         decoded_seqs = self.greedy_decode_batch(context_embeddings)
 
-        # Convert target_ids -> lists of IDs
-        # Each row of target_ids might contain <pad> after <eos>.
-        # We'll truncate at <eos> for a fair comparison.
+        # Convert target_ids -> lists of IDs, truncating at <eos>.
         ground_truth_seqs = []
         end_idx = self.vocab.end_idx
         for row in target_ids.cpu().tolist():
-            # Truncate at <eos> if it exists
             if end_idx in row:
                 eos_pos = row.index(end_idx)
                 row = row[:eos_pos + 1]
             ground_truth_seqs.append(row)
 
-        # Now compute fraction of EXACT matches
-        # i.e. the predicted sequence of tokens == ground-truth sequence of tokens
-        num_correct = 0
-        rounds = 0
-        for pred_ids, gt_ids in zip(decoded_seqs, ground_truth_seqs):
-            # Convert token IDs -> token strings -> a single SMILES string
-            pred_tokens = self.vocab.decode(pred_ids)
-            gt_tokens = self.vocab.decode(gt_ids)
+        # We'll track:
+        #   num_exactly_correct: # of fully correct sequences
+        #   sum_tokenwise_correct: # of correct tokens across all sequences
+        #   sum_tokenwise_total: total tokens considered across all sequences
+        num_exactly_correct = 0
+        sum_tokenwise_correct = 0
+        sum_tokenwise_total = 0
 
-            # Join them into a single SMILES if your vocab tokens are single characters
-            # or otherwise adapt if tokens need spacing, etc.
-            pred_smiles = "".join(pred_tokens)
-            gt_smiles = "".join(gt_tokens)
+        with open("20240111_100k_decodeded_smiles.txt", "a", encoding="utf-8") as out_file:
+            # Write heading from 'text'
+            out_file.write(f"\n==== {text} ====\n")
 
-            # Print a few samples for debugging
-            if rounds < 7:  # e.g. first 7
-                print(f"\n[Sample {rounds + 1}]")
-                print(f"Predicted SMILES:  {pred_smiles}")
-                print(f"Ground Truth SMILES:  {gt_smiles}")
-                rounds += 1
+            rounds = 0
+            for pred_ids, gt_ids in zip(decoded_seqs, ground_truth_seqs):
+                # Convert IDs -> tokens -> a single SMILES string
+                pred_tokens = self.vocab.decode(pred_ids)
+                gt_tokens = self.vocab.decode(gt_ids)
 
-            # Check if the raw ID lists match exactly
-            if pred_ids == gt_ids:
-                num_correct += 1
+                pred_smiles = "".join(pred_tokens)
+                gt_smiles = "".join(gt_tokens)
 
-        acc = num_correct / len(decoded_seqs)
-        return acc
+                # Record a few samples (e.g. first 5) in the text file
+                if rounds < 5:
+                    out_file.write(f"Predicted SMILES:   {pred_smiles[1:]}\n")
+                    out_file.write(f"Ground Truth SMILES:{gt_smiles}\n\n")
+                    rounds += 1
+
+                # Exact match check at the ID level
+                if pred_ids[1:] == gt_ids:
+                    num_exactly_correct += 1
+
+                # (2) Tokenwise correctness:
+                p = pred_ids[1:] # remove <sos> token
+                g = gt_ids
+                min_len = min(len(p), len(g))
+                for i in range(min_len):
+                    sum_tokenwise_total += 1
+                    if p[i] == g[i]:
+                        sum_tokenwise_correct += 1
+
+            # Compute the final metrics
+            exact_match_acc = num_exactly_correct / len(decoded_seqs) if decoded_seqs else 0.0
+            tokenwise_acc = sum_tokenwise_correct / sum_tokenwise_total if sum_tokenwise_total > 0 else 0.0
+
+            out_file.write(f"Free Decoding Accuracy (exact ID match):  {exact_match_acc:.4f}\n")
+            out_file.write(f"Free Decoding Tokenwise Correctness:      {tokenwise_acc:.4f}\n\n")
+
+        return exact_match_acc, tokenwise_acc
 
 
 class AttrDict(dict):
