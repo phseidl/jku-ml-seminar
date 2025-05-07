@@ -17,7 +17,6 @@ mlruns/
 *.pkl
 *.h5
 *.csv
-*.json
 *.csv.gz
 *.npy
 *.pt
