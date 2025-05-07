@@ -53,6 +53,7 @@ The `test.json` file contains the paths to the test data.
 | lr_init         | The learning rate to use for training                                          | config.json                       |
 | dropout         | The dropout rate                                                               | config.json                       |
 | num_channels    | The number of channels in the data (bipolar = 20, unipolar = 19)               | config.json                       |
+| num_layers      | The number of lstm layers                                                      | config.json                       |
 | sample_rate     | The sample rate of the data (as specified in preprocessing.py, default is 200) | config.json                       |
 | val_interval    | The validation interval given as decimal percent                               | config.json                       |
 | enc_model       | The feature extraction model to use (raw, stft)                                | config.json                       |

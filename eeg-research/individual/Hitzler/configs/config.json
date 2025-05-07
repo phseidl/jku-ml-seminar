@@ -1,6 +1,7 @@
 {
     "device": "cuda",
     "batch_size": 64,
+    "num_layers": 2,
     "epochs": 15,
     "dropout": 0.15,
     "num_channels": 20,
