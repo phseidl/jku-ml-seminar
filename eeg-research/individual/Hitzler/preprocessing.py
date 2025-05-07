@@ -129,8 +129,6 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
                         labels_data_list.append(labels[start_index:end_index])
 
                     for i in range(len(labels_data_list)):
-                        bipolar_epoch = bipolar_epochs_data[i]
-                        bipolar_epoch = bipolar_epoch[np.newaxis, :, :]
                         patient_name = patient.split('/')[-1].split("\\")[-1]
                         saveFilename = 'DataArray_Patient_'+ str(patient_name)+ "_" + str(iPatient).zfill(3) + "_Session" + str(iSession).zfill(
                             3) + "_Rec" + str(irec).zfill(3) + "_Split" + str(i).zfill(3)

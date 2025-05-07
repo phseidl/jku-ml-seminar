@@ -45,24 +45,24 @@ The configuration files are stored in the `configs/` directory. The `config.json
 The `train.json` and `valid.json` files contain the paths to the training and validation data respectively. 
 The `test.json` file contains the paths to the test data.
 
-| Parameter       | Description                                      | File                              |
-|-----------------|--------------------------------------------------|-----------------------------------|
-| device          | The device to use for training                   | config.json                       |
-| batch_size      | The batch size to use for training               | config.json                       |
-| epochs          | The number of epochs to train for                | config.json                       |
-| lr              | The learning rate to use for training            | config.json                       |
-| dropout         | The dropout rate to use for training             | config.json                       |
-| num_channels    | The number of channels in the data               | config.json                       |
-| num_classes     | The number of classes in the data                | config.json                       |
-| sample_rate     | The sample rate of the data                      | config.json                       |
-| val_interval    | The validation interval in percent               | config.json                       |
-| enc_model       | The feature extraction model to use (raw, stft)  | config.json                       |
-| log_interval    | The logging interval in number of steps          | config.json                       |
-| models_to_train | The models which should be trained (class_names) | train.json                        |
-| data_dir        | The directory containing the data                | train.json, valid.json, test.json |
-| labels_dir      | The directory containing the labels              | train.json, valid.json, test.json |
-| model_path      | The path to the model to evaluate                | test.json                         |
-| model           | The name of the model to evaluate                | test.json                         |
+| Parameter       | Description                                                                    | File                              |
+|-----------------|--------------------------------------------------------------------------------|-----------------------------------|
+| device          | The device to use for training                                                 | config.json                       |
+| batch_size      | The batch size to use for training                                             | config.json                       |
+| epochs          | The number of epochs to train for                                              | config.json                       |
+| lr_init         | The learning rate to use for training                                          | config.json                       |
+| dropout         | The dropout rate                                                               | config.json                       |
+| num_channels    | The number of channels in the data (bipolar = 20, unipolar = 19)               | config.json                       |
+| sample_rate     | The sample rate of the data (as specified in preprocessing.py, default is 200) | config.json                       |
+| val_interval    | The validation interval given as decimal percent                               | config.json                       |
+| enc_model       | The feature extraction model to use (raw, stft)                                | config.json                       |
+| eeg_type        | The type of EEG data to use (unipolar, bipolar)                                | config.json                       |
+| log_interval    | The logging interval in number of steps                                        | config.json                       |
+| models_to_train | The models which should be trained (class_names)                               | train.json                        |
+| data_dir        | The directory containing the data                                              | train.json, valid.json, test.json |
+| labels_dir      | The directory containing the labels                                            | train.json, valid.json, test.json |
+| model_path      | The path to the model to evaluate                                              | test.json                         |
+| model           | The name of the model to evaluate                                              | test.json                         |
 
 ## Usage
 
@@ -87,6 +87,7 @@ Here is an example of how to run the preprocessing script:
 python preprocessing.py --data_dir 'data/TUH/2.0.3/raw/dev' --save_location 'data/TUH/2.0.3/processed/dev' --channels 'EEG FP1-REF, EEG FP2-REF, EEG F3-REF, EEG F4-REF, EEG C3-REF, EEG C4-REF, EEG P3-REF, EEG P4-REF, EEG O1-REF, EEG O2-REF, EEG F7-REF, EEG F8-REF, EEG T3-REF, EEG T4-REF, EEG T5-REF, EEG T6-REF, EEG CZ-REF, EEG PZ-REF, EEG FZ-REF' --alternative_channel_names 'EEG FP1-LE, EEG FP2-LE, EEG F3-LE, EEG F4-LE, EEG C3-LE, EEG C4-LE, EEG P3-LE, EEG P4-LE, EEG O1-LE, EEG O2-LE, EEG F7-LE, EEG F8-LE, EEG T3-LE, EEG T4-LE, EEG T5-LE, EEG T6-LE, EEG CZ-LE, EEG PZ-LE, EEG FZ-LE'
 ```
 
+The script should be run for each of the three datasets (train, dev/valid, test) separately.
 
 ### Training
 
@@ -110,14 +111,17 @@ Valid options are:
 - `FeatureTransformer`
 - `GuidedFeatureTransformer`
 
+A default configuration file for the CNN2D_LSTM is provided in the `configs/` directory.
+
 ```
 python train.py
 ```
 
 ### Evaluation
 
-The evaluation script can be used to evaluate the models. It requires the configuration of test.json
+The evaluation script can be used to evaluate the models. It requires the configuration of test.json.
 
+Here also a default configuration file for the CNN2D_LSTM is provided in the `configs/` directory.
 
 ```
 python evaluate.py

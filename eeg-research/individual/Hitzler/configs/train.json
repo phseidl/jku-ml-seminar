@@ -1,0 +1,5 @@
+{
+    "data_dir": "data/processed/train/edf",
+    "labels_dir": "data/processed/train/labels",
+    "models_to_train": ["CNN2D_LSTM"]
+}
