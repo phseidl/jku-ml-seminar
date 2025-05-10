@@ -41,7 +41,7 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
                 for irec in range(len(rec_edfs)):
                     print('processing patient: %s, session: %s, recording: %s' % (patient, session, montage))
                     # read edf file
-                    edfPath = os.path.join(montage, rec_edfs[irec])
+                    edfPath = rec_edfs[irec]
                     eeg = mne.io.read_raw_edf(edfPath, preload=True)
 
                     # get sampling frequency
