@@ -95,7 +95,7 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
                     bipolar_epochs_data = bipolar_epochs.get_data(copy=False)
 
                     # read csv_bi file containing start and stop times of seizures
-                    csvPath = os.path.join(montage, csv_bins[irec])
+                    csvPath = csv_bins[irec]
                     # get seizure times from csv file
                     seizureTimes = get_seizure_times(csvPath)
 
