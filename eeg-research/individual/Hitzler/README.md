@@ -9,7 +9,7 @@ The goal of this project is to compare the performance of different deep neural 
 There is also a code repository available from the authors (https://github.com/AITRICS/EEG_real_time_seizure_detection).
 Unfortunately, the code uses a very old version of the [TUH EEG Dataset](https://isip.piconepress.com/projects/tuh_eeg/), which is not available anymore.
 
-In my project I used the models from the original repository and adapted it to the current version (2.0.3) of the TUH EEG Dataset.
+In my project I used the models implementations from the original repository + the EEGNet and adapted it to the current version (2.0.3) of the TUH EEG Dataset.
 For feature extraction I used the two best performing methods in the paper (STFT and Frequency Bands) in addition to the raw EEG.
 
 ## Requirements
@@ -85,7 +85,7 @@ The `--alternative_channel_names` argument specifies the alternative channel nam
 
 Here is an example of how to run the preprocessing script:
 ```
-python preprocessing.py --data_dir 'data/TUH/2.0.3/raw/dev' --save_location 'data/TUH/2.0.3/processed/dev' --channels 'EEG FP1-REF, EEG FP2-REF, EEG F3-REF, EEG F4-REF, EEG C3-REF, EEG C4-REF, EEG P3-REF, EEG P4-REF, EEG O1-REF, EEG O2-REF, EEG F7-REF, EEG F8-REF, EEG T3-REF, EEG T4-REF, EEG T5-REF, EEG T6-REF, EEG CZ-REF, EEG PZ-REF, EEG FZ-REF' --alternative_channel_names 'EEG FP1-LE, EEG FP2-LE, EEG F3-LE, EEG F4-LE, EEG C3-LE, EEG C4-LE, EEG P3-LE, EEG P4-LE, EEG O1-LE, EEG O2-LE, EEG F7-LE, EEG F8-LE, EEG T3-LE, EEG T4-LE, EEG T5-LE, EEG T6-LE, EEG CZ-LE, EEG PZ-LE, EEG FZ-LE'
+python preprocessing.py --data_dir "data/TUH/2.0.3/raw/dev" --save_location "data/TUH/2.0.3/processed/dev" --channels "EEG FP1-REF, EEG FP2-REF, EEG F3-REF, EEG F4-REF, EEG C3-REF, EEG C4-REF, EEG P3-REF, EEG P4-REF, EEG O1-REF, EEG O2-REF, EEG F7-REF, EEG F8-REF, EEG T3-REF, EEG T4-REF, EEG T5-REF, EEG T6-REF, EEG CZ-REF, EEG PZ-REF, EEG FZ-REF" --alternative_channel_names "EEG FP1-LE, EEG FP2-LE, EEG F3-LE, EEG F4-LE, EEG C3-LE, EEG C4-LE, EEG P3-LE, EEG P4-LE, EEG O1-LE, EEG O2-LE, EEG F7-LE, EEG F8-LE, EEG T3-LE, EEG T4-LE, EEG T5-LE, EEG T6-LE, EEG CZ-LE, EEG PZ-LE, EEG FZ-LE"
 ```
 
 The script should be run for each of the three datasets (train, dev/valid, test) separately.
