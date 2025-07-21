@@ -1,9 +1,9 @@
 import json
+import os
 
 import mne
 import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_curve
 from tqdm import tqdm
 
 
@@ -50,15 +50,47 @@ def read_json(filepath):
     return content
 
 
-def get_seizure_times(filepath):
+def get_seizure_times(filepath, csv_path_types):
+    csv_lines_types = pd.read_csv(csv_path_types, skiprows=5)
     csv_lines = pd.read_csv(filepath, skiprows=5)
-    start_stop_times = []
+    start_stop_times = {'start_stop_times': [], 'types_count': csv_lines_types['label'].value_counts()}
     for l in range(csv_lines.shape[0]):
         if (csv_lines.iloc[l, 3] == 'seiz'):
-            start_stop_times.append([csv_lines.iloc[l, 1], csv_lines.iloc[l, 2]])
+            start_stop_times['start_stop_times'].append([csv_lines.iloc[l, 1], csv_lines.iloc[l, 2]])
     return start_stop_times
 
+def get_seizure_times_mit(summary, session):
+    start_stop_times = []
+    # find session in summary
+    for i in range(len(summary)):
+        if session in summary[i]:
+            count_of_seizures = int(summary[i + 3].split(': ')[1].strip())
+            for j in range(count_of_seizures):
+                start_stop_times.append([float(summary[i + 4 + j].split(': ')[1].split('seconds')[0].strip()), float(summary[i + 4 + j + 1].split(': ')[1].split('seconds')[0].strip())])
+    return start_stop_times
 
+def get_seizure_times_hel(labels_paths):
+    # Read the CSV file
+    annotation1 = pd.read_csv(labels_paths[0])
+    annotation2 = pd.read_csv(labels_paths[1])
+    annotation3 = pd.read_csv(labels_paths[2])
+    # merge them via intersection
+    intersection_df = (annotation1 & annotation2 & annotation3).astype(float)
+
+    # Extract the seizure times
+    start_stop_times = {}
+    for i, rec in enumerate(intersection_df):
+        start_stop_times[i] = []
+        seizure_started = False
+        for j, val in enumerate(intersection_df[rec]):
+            if val == 1.0 and not seizure_started:
+                start_time = j
+                seizure_started = True
+            elif val == 0.0 and seizure_started:
+                end_time = j
+                start_stop_times[i].append([start_time, end_time])
+                seizure_started = False
+    return start_stop_times
 def check_balance_of_dataset(dataset, subset = False, type='train'):
     if not subset:
         labels = dataset.get_labels()

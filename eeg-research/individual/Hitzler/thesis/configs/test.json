@@ -1,0 +1,7 @@
+{
+    "data_dir": "data/TUH/2.0.3/processed/eval/edf",
+    "labels_dir": "data/TUH/2.0.3/processed/eval/labels",
+    "model_path": "best_models/CNN2D_LSTM_best_model.pth",
+    "dataset": "MIT",
+    "model": "CNN2D_LSTM"
+}

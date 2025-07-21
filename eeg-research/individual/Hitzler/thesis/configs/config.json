@@ -1,0 +1,14 @@
+{
+    "device": "cuda",
+    "batch_size": 64,
+    "num_layers": 2,
+    "epochs": 15,
+    "dropout": 0.15,
+    "num_channels": 20,
+    "sample_rate": 200,
+    "lr_init": 0.0003,
+    "log_interval": 50,
+    "val_interval": 0.5,
+    "enc_model": "raw",
+    "eeg_type": "bipolar"
+}

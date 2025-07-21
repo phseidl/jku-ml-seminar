@@ -5,7 +5,7 @@ from datetime import datetime
 import mne.io
 import numpy as np
 from numpy import save
-
+import pandas as pd
 from utils import get_seizure_times
 
 
@@ -20,6 +20,8 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
     patients_path = [os.path.join(data_dir, f_) for f_ in patients]
     no_of_seizures = 0
     no_of_non_seizures = 0
+    seizure_count_types = {}
+    seizure_lengths = []
     for iPatient in range(len(patients_path)):
         patient = patients_path[iPatient]
         # get list of sessions for patient
@@ -38,6 +40,8 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
                 rec_edfs = [os.path.join(montage, f_) for f_ in os.listdir(montage) if f_.endswith('.edf')]
                 # get list of csv_bi files for montage
                 csv_bins = [os.path.join(montage, f_) for f_ in os.listdir(montage) if f_.endswith('.csv_bi')]
+
+                csvs = [os.path.join(montage, f_) for f_ in os.listdir(montage) if f_.endswith('.csv')]
                 for irec in range(len(rec_edfs)):
                     print('processing patient: %s, session: %s, recording: %s' % (patient, session, montage))
                     # read edf file
@@ -97,8 +101,17 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
                     # read csv_bi file containing start and stop times of seizures
                     csvPath = csv_bins[irec]
                     # get seizure times from csv file
-                    seizureTimes = get_seizure_times(csvPath)
+                    seizureTimes = get_seizure_times(csvPath, csvs[irec])
 
+                    # add types_count to seizure_count_types
+                    for key, value in seizureTimes['types_count'].items():
+                        if key in seizure_count_types:
+                            seizure_count_types[key] += value
+                        else:
+                            seizure_count_types[key] = value
+
+                    seizureTimes = seizureTimes['start_stop_times']
+                    [seizure_lengths.append(entry[1] - entry[0]) for entry in seizureTimes]
                     # create label vector, 1 = seizure, 0 = no seizure, length = number of epochs * window_size * sample_rate
                     labels = np.zeros(epochs_data.shape[0] * epochs_data.shape[2])
 
@@ -138,8 +151,13 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
                         epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-unipolar-epo.fif"), overwrite=True)
                         # save bipolar epochs to edf folder
                         bipolar_epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-bipolar-epo.fif"), overwrite=True)
+
+
     print('Number of seizures: ', no_of_seizures)
     print('Number of non-seizures: ', no_of_non_seizures)
+    #print('Seizure count types: ', df_st.groupby('type').size())
+    print('Seizure average length: ', {(sum(seizure_lengths) / len(seizure_lengths))})
+    print('Seizure count types: ', seizure_count_types)
 
 
 if __name__ == '__main__':

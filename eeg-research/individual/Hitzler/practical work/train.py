@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import torch
 from torch.utils import data
@@ -100,6 +101,10 @@ if __name__ == "__main__":
     device = torch.device(config["device"] if torch.cuda.is_available() else "cpu")
 
     models = train["models_to_train"]
+
+    # create the best_models folder if it does not exist
+    os.makedirs("best_models", exist_ok=True)
+
 
     for model_class in models:
         model = convert_string_to_model(model_class, config, device)

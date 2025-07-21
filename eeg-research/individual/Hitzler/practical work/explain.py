@@ -19,8 +19,8 @@ from pytorch_grad_cam  import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 from sklearn.preprocessing import normalize
 
-data = (glob.glob(os.path.join("data/processed/dev/edf", "*.fif")))
-labels = (glob.glob(os.path.join("data/processed/dev/labels", "*labels.npy")))
+data = (glob.glob(os.path.join("../data/processed/dev/edf", "*.fif")))
+labels = (glob.glob(os.path.join("../data/processed/dev/labels", "*labels.npy")))
 
 MODEL_DICT = {
     "EEGNet": EEGNet
@@ -28,8 +28,8 @@ MODEL_DICT = {
 }
 
 if __name__ == "__main__":
-    config = read_json('configs/config.json')
-    test_config = read_json('configs/test.json')
+    config = read_json('practical work/configs/config.json')
+    test_config = read_json('practical work/configs/test.json')
     model = MODEL_DICT[test_config["model"]](config, torch.device(config["device"]))
 
     model.load_state_dict(torch.load(test_config["model_path"]))
