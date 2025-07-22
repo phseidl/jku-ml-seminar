@@ -8,23 +8,30 @@ from tqdm import tqdm
 
 from EEGDataset import EEGDataset
 from EEGTrainer import EEGTrainer
-from models.alexnet import AlexNet
-from models.chrononet import ChronoNet
-from models.cnn1d_blstm import CNN1D_BLSTM
+from models.cnn_mamba import CNN_MAMBA
+from models.cnn_mamba2 import CNN_MAMBA2
+from models.cnn_xlstm import CNN_XLSTM
+from models.base_mamba2 import BASE_MAMBA2
+from models.base_mamba import BASE_MAMBA
+
+from models.base_xlstm import BASE_XLSTM
+
 from models.cnn1d_lstm import CNN1D_LSTM
-from models.cnn2d_blstm import CNN2D_BLSTM
 from models.cnn2d_lstm import CNN2D_LSTM
+from models.cnn2d_blstm import CNN2D_BLSTM
+from models.cnn1d_blstm import CNN1D_BLSTM
 from models.densenet import DenseNet
 from models.eegnet_pytorch import EEGNet
-from models.mobilenet import MobileNetV3
 from models.mobilenet_lstm import MobileNet_LSTM
 from models.resnet import RESNET18_CONV2D
 from models.resnet_dilation_lstm import Resnet_Dialation_LSTM
 from models.resnet_lstm import ResNet_LSTM
+from models.alexnet import AlexNet
+from models.chrononet import ChronoNet
+from models.mobilenet import MobileNetV3
 from models.tdnn_lstm import TDNN_LSTM
 from models.transformer.feature_transformer import FT
 from models.transformer.guided_feature_transformer import GFT
-from models.vgg import VGG16
 from utils import read_json, check_balance_of_dataset
 
 torch.set_float32_matmul_precision('medium')
@@ -45,9 +52,14 @@ MODEL_DICT = {
     "ResNet": RESNET18_CONV2D,
     "MobileNetV3": MobileNetV3,
     "TDNN_LSTM": TDNN_LSTM,
-    "VGG": VGG16,
     "FeatureTransformer": FT,
-    "GuidedFeatureTransformer": GFT
+    "GuidedFeatureTransformer": GFT,
+    "BASE_MAMBA": BASE_MAMBA,
+    "BASE_MAMBA2": BASE_MAMBA2,
+    "BASE_XLSTM": BASE_XLSTM,
+    "CNN_XLSTM": CNN_XLSTM,
+    "CNN_MAMBA": CNN_MAMBA,
+    "CNN_MAMBA2": CNN_MAMBA2
 }
 
 def convert_string_to_model(model_name, config, device):
