@@ -1,3 +1,13 @@
+# Copyright (c) 2022, Kwanhyung Lee, AITRICS. All rights reserved.
+#
+# Licensed under the MIT License;
+# you may not use this file except in compliance with the License.
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -11,26 +21,8 @@ class CNN2D_BLSTM(nn.Module):
         self.hidden_dim = 256
         self.dropout = args["dropout"]  # Changed from args.dropout to args["dropout"]
 
-        self.feature_extractor = args["enc_model"]  # Changed from args.enc_model to args["enc_model"]
-
-        if self.feature_extractor == "raw":
-            pass
-        else:
-
-            self.feat_model = self.feat_models[self.feature_extractor]
-
-        if self.feature_extractor == "psd1" or self.feature_extractor == "psd2":
-            self.feature_num = 7
-        elif self.feature_extractor == "sincnet":
-            self.feature_num = args["cnn_channel_sizes"][
-                args["sincnet_layer_num"] - 1]  # Changed from args.cnn_channel_sizes to args["cnn_channel_sizes"]
-        elif self.feature_extractor == "stft1":
-            self.feature_num = 50
-        elif self.feature_extractor == "stft2":
-            self.feature_num = 100
-        elif self.feature_extractor == "raw":
-            self.feature_num = 1
-            self.num_data_channel = 1
+        self.feature_num = 1
+        self.num_data_channel = 1
 
         activation = 'relu'
         self.activations = nn.ModuleDict([
@@ -58,35 +50,13 @@ class CNN2D_BLSTM(nn.Module):
                 nn.Dropout(self.dropout),
             )
 
-        if args["enc_model"] == "raw":
-            self.features = nn.Sequential(
-                conv2d_bn(self.num_data_channel, 64, (1, 51), (1, 4), (0, 25)),
-                nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4)),
-                conv2d_bn(64, 128, (1, 21), (1, 2), (0, 10)),
-                conv2d_bn(128, 256, (1, 9), (1, 2), (0, 4)),
-            )
-        elif args["enc_model"] == "sincnet":
-            self.features = nn.Sequential(
-                conv2d_bn(1, 64, (7, 21), (7, 2), (0, 10)),
-                conv2d_bn(64, 128, (1, 21), (1, 2), (0, 10)),
-                nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4)),
-                conv2d_bn(128, 256, (1, 9), (1, 2), (0, 4)),
-            )
-        elif args["enc_model"] == "psd1" or args["enc_model"] == "psd2":
-            self.features = nn.Sequential(
-                conv2d_bn(1, 64, (7, 21), (7, 2), (0, 10)),
-                conv2d_bn(64, 128, (1, 21), (1, 2), (0, 10)),
-                nn.MaxPool2d(kernel_size=(1, 2), stride=(1, 2)),
-                conv2d_bn(128, 256, (1, 9), (1, 1), (0, 4)),
-            )
+        self.features = nn.Sequential(
+            conv2d_bn(self.num_data_channel, 64, (1, 51), (1, 4), (0, 25)),
+            nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4)),
+            conv2d_bn(64, 128, (1, 21), (1, 2), (0, 10)),
+            conv2d_bn(128, 256, (1, 9), (1, 2), (0, 4)),
+        )
 
-        else:
-            self.features = nn.Sequential(
-                conv2d_bn(1, 64, (100, 3), (100, 1), (0, 1)),
-                conv2d_bn(64, 128, (1, 51), (1, 2), (0, 25)),
-                nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4)),
-                conv2d_bn(128, 256, (1, 9), (1, 1), (0, 4)),
-            )
         self.agvpool = nn.AdaptiveAvgPool2d((1, 8))
 
         self.blstm = nn.LSTM(

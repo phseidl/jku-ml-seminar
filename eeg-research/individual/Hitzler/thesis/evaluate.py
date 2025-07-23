@@ -68,12 +68,9 @@ if __name__ == "__main__":
     model.load_state_dict(torch.load(test_config["model_path"]))
 
     # create the dataset and dataloader
-    train_dataset = EEGDataset(train_config["data_dir"], train_config["labels_dir"], config["enc_model"],
-                               config["eeg_type"])
-    valid_dataset = EEGDataset(valid_config["data_dir"], valid_config["labels_dir"], config["enc_model"],
-                               config["eeg_type"])
-    test_dataset = EEGDataset(test_config["data_dir"], test_config["labels_dir"], config["enc_model"],
-                              config["eeg_type"])
+    train_dataset = EEGDataset(train_config["data_dir"], train_config["labels_dir"])
+    valid_dataset = EEGDataset(valid_config["data_dir"], valid_config["labels_dir"])
+    test_dataset = EEGDataset(test_config["data_dir"], test_config["labels_dir"])
 
     trainloader = DataLoader(train_dataset, batch_size=1,
                              num_workers=0, persistent_workers=False, drop_last=True, pin_memory=True)

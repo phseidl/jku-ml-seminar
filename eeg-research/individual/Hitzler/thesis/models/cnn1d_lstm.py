@@ -47,12 +47,6 @@ class CNN1D_LSTM(nn.Module):
                 nn.Dropout(self.dropout),
             )
 
-        def conv1d_bn_nodr(inp, oup, kernel_size, stride, padding):
-            return nn.Sequential(
-                nn.Conv1d(inp, oup, kernel_size=kernel_size, stride=stride, padding=padding),
-                nn.BatchNorm1d(oup),
-                self.activations[activation],
-            )
 
         self.features = nn.Sequential(
             conv1d_bn(self.conv1dconcat_len, 64, 51, 4, 25),
@@ -79,7 +73,6 @@ class CNN1D_LSTM(nn.Module):
         )
 
     def forward(self, x):
-        #x = x.permute(0, 2, 1)
         x = self.features(x)
         x = self.agvpool(x)
         x = x.permute(0, 2, 1)

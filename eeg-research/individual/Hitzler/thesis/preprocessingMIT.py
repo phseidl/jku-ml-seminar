@@ -111,8 +111,7 @@ if __name__ == '__main__':
     parser.add_argument('--channels', type=str, default='FP1-F7, F7-T7, T7-P7, P7-O1, FP1-F3, F3-C3, C3-P3, P3-O1, FP2-F4, F4-C4, C4-P4, P4-O2, FP2-F8, F8-T8, P8-O2, FZ-CZ, CZ-PZ, P7-T7, T7-FT9, FT9-FT10, FT10-T8')
 
     args = parser.parse_args()
-    data_dir = 'C:/Users/fh430/Documents/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/mit/train'
-    save_location = 'C:/Users/fh430/Documents/OneDrive - Johannes Kepler Universität Linz/Uni/Bachelor Thesis/jku-ml-seminar23/eeg-research/individual/Hitzler/data/mit/processed/train'
+    data_dir = args.data_dir
+    save_location = args.save_location
     channels = [channel.strip() for channel in args.channels.split(',')]
-    # alternative channels
     process_data(data_dir, save_location, channels)

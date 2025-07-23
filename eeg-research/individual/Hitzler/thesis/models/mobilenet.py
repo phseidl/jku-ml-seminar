@@ -192,34 +192,17 @@ class MobileNetV3(nn.Module):
             [5, 6, 160, 1, 1, 1]
         ]
 
-        self.enc_model = self.args["enc_model"]
 
-        if self.args["eeg_type"] == "bipolar":
-            input_channel = _make_divisible(20 * self.width_mult, 8)
-        elif self.args["eeg_type"] == "unipolar":
-            input_channel = _make_divisible(19 * self.width_mult, 8)
-        else:
-            print('Unsupported eeg type...')
+        input_channel = _make_divisible(20 * self.width_mult, 8)
 
         self.is_features = True
         self.is_psd = False
-        if self.args["enc_model"] == "psd1" or self.args["enc_model"] == 'psd2':
-            self.is_psd = True
-            self.conv1 = conv_3x3_bn(self.num_data_channel, input_channel, 2, self.is_psd)
-        else:
-            if self.args["enc_model"] == 'raw':
-                self.is_features = False
-                self.conv1 = nn.Sequential(
-                    nn.Conv2d(1, input_channel, (1, 51), (1, 2), (0, 25)),
-                    nn.BatchNorm2d(input_channel),
-                    h_swish()
-                )
-            else:
-                self.conv1 = nn.Sequential(
-                    nn.Conv2d(1, input_channel, (7, 21), (7, 2), (0, 10)),
-                    nn.BatchNorm2d(input_channel),
-                    h_swish()
-                )
+        self.is_features = False
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(1, input_channel, (1, 51), (1, 2), (0, 25)),
+            nn.BatchNorm2d(input_channel),
+            h_swish()
+        )
 
         # building inverted residual blocks
         layers = nn.ModuleList()
@@ -246,14 +229,7 @@ class MobileNetV3(nn.Module):
         self._initialize_weights()
 
     def forward(self, x):
-        #x = x.permute(0, 2, 1)
-
-        if self.args["enc_model"] != "raw":
-            x = self.feature_extractor[self.args["enc_model"]](x)
-            if self.args["enc_model"] == "sincnet":
-                x = x.reshape(x.shape[0], 1, self.args["num_channel"] * self.args["sincnet_bandnum"], x.shape[-1])
-        else:
-            x = torch.unsqueeze(x, 1)
+        x = torch.unsqueeze(x, 1)
         x = self.conv1(x)
         x = self.features(x)
         x = self.conv(x)

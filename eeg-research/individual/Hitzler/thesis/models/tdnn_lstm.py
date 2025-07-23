@@ -72,12 +72,6 @@ class TDNN_LSTM(nn.Module):
         self.tdnn_input_dim = self.args["num_channels"]
         self.feature_num = 1
         self.T = 200
-        if args["enc_model"] == "psd":
-            self.T = 200
-            self.feature_num = 7
-        elif args["enc_model"] == "sincnet":
-            self.feature_num = args["cnn_channel_sizes"][args["sincnet_layer_num"] - 1]
-            self.T = 280
         self.conv1dconcat_len = self.feature_num * self.num_data_channel
         self.D = self.feature_num
         activation = 'relu'

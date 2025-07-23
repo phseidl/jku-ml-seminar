@@ -80,9 +80,9 @@ if __name__ == "__main__":
 
 
 
-    train_dataset = EEGDataset(train["data_dir"], train["labels_dir"], config["enc_model"], config["eeg_type"])
-    valid_dataset = EEGDataset(valid["data_dir"], valid["labels_dir"], config["enc_model"], config["eeg_type"])
-    test_dataset = EEGDataset(test["data_dir"], test["labels_dir"], config["enc_model"], config["eeg_type"])
+    train_dataset = EEGDataset(train["data_dir"], train["labels_dir"])
+    valid_dataset = EEGDataset(valid["data_dir"], valid["labels_dir"])
+    test_dataset = EEGDataset(test["data_dir"], test["labels_dir"])
 
     df, counts = check_balance_of_dataset(train_dataset)
 

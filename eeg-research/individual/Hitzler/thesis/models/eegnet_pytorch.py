@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 
-from feature_extractor.psd import PSD_FEATURE2
-from feature_extractor.spectogram_feature import SPECTROGRAM_FEATURE_BINARY2
-
 
 class Conv2dWithConstraint(nn.Conv2d):
     def __init__(self, *args, max_norm: int = 1, **kwargs):
@@ -64,23 +61,11 @@ class EEGNet(nn.Module):
 
         self.args = args
 
-        self.feature_extractor = nn.ModuleDict({
-            'raw': None,
-            'psd': PSD_FEATURE2(),
-            'stft': SPECTROGRAM_FEATURE_BINARY2()
-        })
-
         self.F1 = 8
         self.F2 = 16
         self.D = 2
-        #if args["enc_model"] == 'raw':
         self.chunk_size = 800
         self.num_electrodes = 19
-
-        #TODO consider swapping
-        #elif args["enc_model"] == "stft":
-        #    self.chunk_size = 100
-        #    self.num_electrodes = 1900
 
 
         self.num_classes = 2

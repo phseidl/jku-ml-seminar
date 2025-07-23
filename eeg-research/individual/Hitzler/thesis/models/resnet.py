@@ -37,23 +37,13 @@ class RESNET18_CONV2D(nn.Module):
     def __init__(self, args: dict, device):
         super(RESNET18_CONV2D, self).__init__()
         
-        self.enc_model = args["enc_model"]
         num_blocks = [2, 2, 2, 2]
         block = BasicBlock
         self.in_planes = 64
         self.in_channels = args["num_channels"]
 
-        self.features = self.enc_model != "raw"
-        self.is_psd = self.enc_model in ["psd1", "psd2"]
-        
-        if self.is_psd:
-            self.conv1 = nn.Conv2d(self.in_channels, 64, kernel_size=(1, 15), stride=(1, 2), padding=(0, 7), bias=False)
-        elif self.enc_model == "raw":
-            self.conv1 = nn.Conv2d(1, 64, kernel_size=(1, 51), stride=(1, 4), padding=(0, 25), bias=False)
-        elif self.enc_model == "sincnet":
-            self.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 21), stride=(7, 2), padding=(0, 10), bias=False)
-        else:
-            self.conv1 = nn.Conv2d(self.in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=(1, 51), stride=(1, 4), padding=(0, 25), bias=False)
 
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], self.is_psd, stride=1)
@@ -73,10 +63,7 @@ class RESNET18_CONV2D(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        if self.enc_model != "raw":
-            x = self.feature_extractor[self.enc_model](x)
-        else:
-            x = torch.unsqueeze(x, dim=1)
+        x = torch.unsqueeze(x, dim=1)
         
         x = self.conv1(x)
         out = F.relu(self.bn1(x))

@@ -108,7 +108,6 @@ class ResNet_LSTM(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        #x = x.permute(0, 2, 1)
         x = x.unsqueeze(1)
         x = self.conv1(x)
         x = self.maxpool1(x)

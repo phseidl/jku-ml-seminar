@@ -59,7 +59,6 @@ The `test.json` file contains the paths to the test data.
 | labels_dir      | The directory containing the labels                                            | train.json, valid.json, test.json |
 | model_path      | The path to the model to evaluate                                              | test.json                         |
 | model           | The name of the model to evaluate                                              | test.json                         |
-| dataset         | The name of the dataset to evaluate (e.g., "TUH", "MIT")                       | test.json                         |
 
 ## Usage
 
@@ -145,7 +144,8 @@ python train.py
 
 The evaluation script can be used to evaluate the models. It requires the configuration of test.json.
 
-Here also a default configuration file for the CNN2D_LSTM is provided in the `configs/` directory.
+Here also a default configuration file for the CNN2D_LSTM is provided in the `configs/` directory for the TUH dataset.
+The path can be changed to the MIT processed path in the test.json file to evaluate the models on the CHB-MIT dataset.
 
 ```
 python evaluate.py

@@ -12,8 +12,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-from feature_extractor.psd import PSD_FEATURE2
-from feature_extractor.spectogram_feature import SPECTROGRAM_FEATURE_BINARY2
+
 
 
 class CNN2D_LSTM(nn.Module):
@@ -36,18 +35,9 @@ class CNN2D_LSTM(nn.Module):
             ['elu', nn.ELU()]
         ])
 
-        self.feature_extractor = nn.ModuleDict({
-            'raw': None,
-            'psd': PSD_FEATURE2(),
-            'stft': SPECTROGRAM_FEATURE_BINARY2()
-        })
 
-        if args["enc_model"] == "psd":
-            self.feature_num = 7
-        elif args["enc_model"] == "raw":
-            self.feature_num = 1
-        elif args["enc_model"] == "stft":
-            self.feature_num = 100
+
+        self.feature_num = 1
 
         # Create a new variable for the hidden state, necessary to calculate the gradients
         self.hidden = ((torch.zeros(self.num_layers, args["batch_size"], self.hidden_dim).to(device),
@@ -61,20 +51,12 @@ class CNN2D_LSTM(nn.Module):
                 self.activations[activation],
                 nn.Dropout(self.dropout),
             )
-        if args["enc_model"] == 'raw':
-            self.features = nn.Sequential(
-                conv2d_bn(1, 64, (1, 51), (1, 4), (0, 25)),
-                nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4)),
-                conv2d_bn(64, 128, (1, 21), (1, 2), (0, 10)),
-                conv2d_bn(128, 256, (1, 9), (1, 2), (0, 4)),
-            )
-        elif args["enc_model"] == 'psd' or args["enc_model"] == 'stft':
-            self.features = nn.Sequential(
-                conv2d_bn(1, 64, (7, 21), (7, 2), (0, 10)),
-                conv2d_bn(64, 128, (1, 21), (1, 2), (0, 10)),
-                nn.MaxPool2d(kernel_size=(1, 2), stride=(1, 2)),
-                conv2d_bn(128, 256, (1, 9), (1, 1), (0, 4)),
-            )
+        self.features = nn.Sequential(
+            conv2d_bn(1, 64, (1, 51), (1, 4), (0, 25)),
+            nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4)),
+            conv2d_bn(64, 128, (1, 21), (1, 2), (0, 10)),
+            conv2d_bn(128, 256, (1, 9), (1, 2), (0, 4)),
+        )
 
         self.agvpool = nn.AdaptiveAvgPool2d((1, 1))
 
@@ -94,12 +76,7 @@ class CNN2D_LSTM(nn.Module):
 
 
     def forward(self, x):
-        if self.args["enc_model"] == 'raw':
-            x = x.unsqueeze(1)
-        elif self.args["enc_model"] != 'raw':
-            x = self.feature_extractor[self.args["enc_model"]](x)
-            x = x.reshape(x.size(0), -1, x.size(3)).unsqueeze(1)
-        #x = x.unsqueeze(1)
+        x = x.unsqueeze(1)
         x = self.features(x)
         x = self.agvpool(x)
         x = torch.squeeze(x, 2)

@@ -5,7 +5,7 @@ from datetime import datetime
 import mne.io
 import numpy as np
 from numpy import save
-import pandas as pd
+
 from utils import get_seizure_times
 
 
@@ -148,9 +148,7 @@ def process_data(data_dir, save_location, channels, alternative_channel_names):
                         # save labels to labels folder
                         save(os.path.join(save_location, 'labels', saveFilename + ".labels"), labels_data_list[i])
                         # save epochs to edf folder
-                        epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-unipolar-epo.fif"), overwrite=True)
-                        # save bipolar epochs to edf folder
-                        bipolar_epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-bipolar-epo.fif"), overwrite=True)
+                        bipolar_epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-epo.fif"), overwrite=True)
 
 
     print('Number of seizures: ', no_of_seizures)

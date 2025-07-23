@@ -26,23 +26,7 @@ class CNN1D_BLSTM(nn.Module):
         self.hidden_dim = 256
         self.dropout = args["dropout"]  # Changed from args.dropout to args["dropout"]
 
-        self.feature_extractor = args["enc_model"]  # Changed from args.enc_model to args["enc_model"]
-        if self.feature_extractor == "raw":
-            pass
-        else:
-
-            self.feat_model = self.feat_models[self.feature_extractor]
-
-        if args["enc_model"] == "psd1" or args["enc_model"] == "psd2":
-            self.feature_num = 7
-        elif args["enc_model"] == "sincnet":
-            self.feature_num = args["cnn_channel_sizes"][args["sincnet_layer_num"] - 1]  # Changed from args.cnn_channel_sizes to args["cnn_channel_sizes"]
-        elif args["enc_model"] == "stft1":
-            self.feature_num = 50
-        elif args["enc_model"] == "stft2":
-            self.feature_num = 100
-        elif args["enc_model"] == "raw":
-            self.feature_num = 1
+        self.feature_num = 1
 
         self.conv1dconcat_len = 20
 
@@ -73,27 +57,12 @@ class CNN1D_BLSTM(nn.Module):
                 nn.Dropout(self.dropout),
             )
 
-        if args["enc_model"] == "raw":
-            self.features = nn.Sequential(
-                conv1d_bn(self.conv1dconcat_len, 64, 51, 4, 25),
-                nn.MaxPool1d(kernel_size=4, stride=4),
-                conv1d_bn(64, 128, 21, 2, 10),
-                conv1d_bn(128, 256, 9, 2, 4),
-            )
-        elif args["enc_model"] == "sincnet":
-            self.features = nn.Sequential(
-                conv1d_bn(self.conv1dconcat_len, 64, 21, 2, 10),
-                conv1d_bn(64, 128, 21, 2, 10),
-                nn.MaxPool1d(kernel_size=4, stride=4),
-                conv1d_bn(128, 256, 9, 2, 4),
-            )
-        else:
-            self.features = nn.Sequential(
-                conv1d_bn(self.conv1dconcat_len, 64, 21, 2, 10),
-                conv1d_bn(64, 128, 21, 2, 10),
-                nn.MaxPool1d(kernel_size=2, stride=2),
-                conv1d_bn(128, 256, 9, 1, 4),
-            )
+        self.features = nn.Sequential(
+            conv1d_bn(self.conv1dconcat_len, 64, 51, 4, 25),
+            nn.MaxPool1d(kernel_size=4, stride=4),
+            conv1d_bn(64, 128, 21, 2, 10),
+            conv1d_bn(128, 256, 9, 2, 4),
+        )
         self.agvpool = nn.AdaptiveAvgPool1d(8)
 
         self.blstm = nn.LSTM(
@@ -118,12 +87,7 @@ class CNN1D_BLSTM(nn.Module):
         )
 
     def forward(self, x):
-        #x = x.permute(0, 2, 1)
-        if self.feature_extractor != "raw":
-            x = self.feat_model(x)
-            x = torch.reshape(x, (self.args["batch_size"], self.conv1dconcat_len, x.size(3)))  # Changed from args.batch_size to args["batch_size"]
         x = self.features(x)
-
         x = self.agvpool(x)
         x = x.permute(0, 2, 1)
         output, _ = self.blstm(x, self.blstm_hidden)
