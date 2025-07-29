@@ -1,3 +1,6 @@
+import pickle
+import re
+
 from utils import get_seizure_times_mit
 
 import argparse
@@ -21,6 +24,7 @@ def process_data(data_dir, save_location, channels):
     sessions_path = [os.path.join(data_dir, f_) for f_ in sessions]
     no_of_seizures = 0
     no_of_non_seizures = 0
+    f = open("channel_errors.txt", "a")
     seizure_lengths = []
     for iSession in range(len(sessions_path)):
         summary = open(os.path.join(sessions_path[iSession], sessions[iSession]+"-summary.txt")).readlines()
@@ -35,6 +39,14 @@ def process_data(data_dir, save_location, channels):
             # read edf file
             edfPath = os.path.join(rec_edfs[irec])
             eeg = mne.io.read_raw_edf(edfPath, preload=True)
+            # drop dummy channels
+            try:
+                eeg.pick(channels)
+            except Exception as e:
+                print(e)
+                f.write(str(str(e) + "\n"))
+                print("channels not present")
+                continue
 
             # get sampling frequency
             sfreq = eeg.info['sfreq']
@@ -58,8 +70,9 @@ def process_data(data_dir, save_location, channels):
             epochs = epochs.resample(200)
             epochs_data = epochs.get_data(copy=False)
 
+
             # find seizure times in summary file
-            seizureTimes = get_seizure_times_mit(summary, sessions[iSession])
+            seizureTimes = get_seizure_times_mit(summary, os.path.basename(rec_edfs[irec]))
             [seizure_lengths.append(entry[1] - entry[0]) for entry in seizureTimes]
 
             # create label vector, 1 = seizure, 0 = no seizure, length = number of epochs * window_size * sample_rate
@@ -97,9 +110,8 @@ def process_data(data_dir, save_location, channels):
                 save(os.path.join(save_location, 'labels', saveFilename + ".labels"), labels_data_list[i])
                 # save epochs to edf folder
                 epochs[i].save(os.path.join(save_location, 'edf', saveFilename + "-epo.fif"), overwrite=True)
-                # save bipolar epochs to edf folder
 
-
+    f.close()
     print('Number of seizures: ', no_of_seizures)
     print('Number of non-seizures: ', no_of_non_seizures)
     print('Seizure average length: ', {(sum(seizure_lengths) / len(seizure_lengths))})
@@ -108,10 +120,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, default='data/mit/train')
     parser.add_argument('--save_location', type=str, default='data/mit/processed/train')
-    parser.add_argument('--channels', type=str, default='FP1-F7, F7-T7, T7-P7, P7-O1, FP1-F3, F3-C3, T8-P8-0, C3-P3, P3-O1, FP2-F4, F4-C4, C4-P4, P4-O2, FP2-F8, F8-T8, P8-O2, FZ-CZ, CZ-PZ, P7-T7, T7-FT9')
+    parser.add_argument('--channels', type=str,
+                        default='FP1-F7, F7-T7, T7-P7, P7-O1, FP1-F3, F3-C3, T8-P8-0, C3-P3, P3-O1, FP2-F4, F4-C4, C4-P4, P4-O2, FP2-F8, F8-T8, P8-O2, FZ-CZ, CZ-PZ, P7-T7, T7-FT9')
 
     args = parser.parse_args()
     data_dir = args.data_dir
     save_location = args.save_location
     channels = [channel.strip() for channel in args.channels.split(',')]
+
     process_data(data_dir, save_location, channels)
