@@ -102,7 +102,7 @@ class DenseNet(nn.Module):
         self.args = args
 
         self.growthRate = 12
-        self.depth = 100
+        self.depth = 50
         self.reduction = 0.5
         self.nClasses = 1
         self.bottleneck = True

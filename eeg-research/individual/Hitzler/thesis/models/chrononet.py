@@ -158,7 +158,7 @@ class ChronoNet(nn.Module):
         super(ChronoNet, self).__init__()
         self.args = args
         self.batch_size = self.args["batch_size"]
-        self.num_channel = self.args["num_channels"]
+        self.num_channel = 20
         self.slice_len = self.args["sample_rate"] * self.args["window_size"]
         self.out_channel = 96
         self.feature_len = [self.slice_len, 100, 500, 25]
@@ -167,7 +167,7 @@ class ChronoNet(nn.Module):
         self.hidden_gru2 = torch.zeros(1, self.args["batch_size"], 32).to(device)
         self.hidden_gru3 = torch.zeros(1, self.args["batch_size"], 32).to(device)
         self.hidden_gru4 = torch.zeros(1, self.args["batch_size"], 1).to(device)
-        self.inception1 = Inception(self.num_channel)
+        self.inception1 = Inception(20)
         self.inception2 = Inception(96)
         self.inception3 = Inception(96)
         self.gru1 = nn.GRU(96, 32, num_layers=1, batch_first=True)

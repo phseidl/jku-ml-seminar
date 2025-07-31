@@ -22,7 +22,7 @@ class CNN1D_LSTM(nn.Module):
         self.hidden_dim = 512
         self.dropout = args["dropout"]
 
-        self.conv1dconcat_len = 19
+        self.conv1dconcat_len = 20
 
         activation = 'relu'
         self.activations = nn.ModuleDict([

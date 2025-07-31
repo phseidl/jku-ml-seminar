@@ -1,6 +1,8 @@
 import pickle
 import re
 
+from mne import EpochsArray
+
 from utils import get_seizure_times_mit
 
 import argparse
@@ -70,7 +72,19 @@ def process_data(data_dir, save_location, channels):
             epochs = epochs.resample(200)
             epochs_data = epochs.get_data(copy=False)
 
-
+            # add four additional channels with zeros at index 8,9,10,11
+            epochs_data = np.concatenate((epochs_data, np.zeros((epochs_data.shape[0], 4, epochs_data.shape[2]))), axis=1)
+            # move them to index 8,9,10,11
+            epochs_data = np.concatenate((epochs_data[:, :8, :], epochs_data[:, 16:, :], epochs_data[:, 8:16, :]), axis=1)
+            # create new metadata
+            old_ch_names = epochs.ch_names
+            new_ch_names = old_ch_names[:8] + ['dummy1', 'dummy2', 'dummy3', 'dummy4'] + old_ch_names[8:]
+            new_info = mne.create_info(
+                ch_names=new_ch_names,
+                sfreq=epochs.info['sfreq']
+            )
+            epochs = EpochsArray(epochs_data, new_info, events=epochs.events, event_id=epochs.event_id,
+                         tmin=epochs.tmin, baseline=epochs.baseline)
             # find seizure times in summary file
             seizureTimes = get_seizure_times_mit(summary, os.path.basename(rec_edfs[irec]))
             [seizure_lengths.append(entry[1] - entry[0]) for entry in seizureTimes]
@@ -121,11 +135,10 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', type=str, default='data/mit/train')
     parser.add_argument('--save_location', type=str, default='data/mit/processed/train')
     parser.add_argument('--channels', type=str,
-                        default='FP1-F7, F7-T7, T7-P7, P7-O1, FP1-F3, F3-C3, T8-P8-0, C3-P3, P3-O1, FP2-F4, F4-C4, C4-P4, P4-O2, FP2-F8, F8-T8, P8-O2, FZ-CZ, CZ-PZ, P7-T7, T7-FT9')
-
+                        default='FP1-F7, F7-T7, T7-P7, P7-O1, FP2-F8, F8-T8, T8-P8-0, P8-O2, P7-T7, T7-FT9, C3-P3, P3-O1, FT9-FT10, FT10-T8, C4-P4, P4-O2')
     args = parser.parse_args()
-    data_dir = args.data_dir
-    save_location = args.save_location
+    data_dir = '/mnt/cache/data/MIT/raw/all'
+    save_location = '/mnt/cache/data/MIT/processed/all'
     channels = [channel.strip() for channel in args.channels.split(',')]
 
     process_data(data_dir, save_location, channels)

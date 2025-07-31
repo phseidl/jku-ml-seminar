@@ -13,7 +13,6 @@ class AlexNet(nn.Module):
         super(AlexNet, self).__init__()
 
         self.args = args
-        self.in_channels = self.args["num_channels"]
         self.features = True
 
         self.net = nn.Sequential(
@@ -34,7 +33,7 @@ class AlexNet(nn.Module):
         )
         self.features = False
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=(1, 51), stride=(1, 4))
-        self.output_size = 19 * 5
+        self.output_size = 20 * 5
         in_feature = 64 * self.output_size
         self.fc1 = nn.Linear(in_features=64 * self.output_size, out_features=in_feature // 2)
 

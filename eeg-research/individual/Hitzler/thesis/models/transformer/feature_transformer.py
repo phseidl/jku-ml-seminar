@@ -32,7 +32,6 @@ class FT(nn.Module):
         self.num_layers = args["num_layers"]
         self.hidden_dim = 256
         self.dropout = args["dropout"]
-        self.num_data_channel = args["num_channels"]
         enc_model_dim = 128
 
         self.feature_num = 1

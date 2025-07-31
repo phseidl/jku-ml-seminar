@@ -83,11 +83,7 @@ class CNN2D_BLSTM(nn.Module):
         )
 
     def forward(self, x):  # Removed unused argument
-        if self.feature_extractor != "raw":
-            x = self.feat_model(x)
-            x = x.reshape(x.size(0), -1, x.size(3)).unsqueeze(1)
-        else:
-            x = x.unsqueeze(1)
+        x = x.unsqueeze(1)
         x = self.features(x)
         x = self.agvpool(x)
         x = torch.squeeze(x, 2)

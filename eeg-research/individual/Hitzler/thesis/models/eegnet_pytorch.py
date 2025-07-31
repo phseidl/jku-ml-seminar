@@ -61,11 +61,11 @@ class EEGNet(nn.Module):
 
         self.args = args
 
-        self.F1 = 8
-        self.F2 = 16
-        self.D = 2
+        self.F1 = 16
+        self.F2 = 32
+        self.D = 4
         self.chunk_size = 800
-        self.num_electrodes = 19
+        self.num_electrodes = 20
 
 
         self.num_classes = 2

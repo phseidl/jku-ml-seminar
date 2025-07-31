@@ -68,8 +68,8 @@ class TDNN_LSTM(nn.Module):
 
         self.num_layers = self.args["num_layers"]
         self.hidden_dim = 512
-        self.num_data_channel = self.args["num_channels"]
-        self.tdnn_input_dim = self.args["num_channels"]
+        self.num_data_channel = 20
+        self.tdnn_input_dim = 20
         self.feature_num = 1
         self.T = 200
         self.conv1dconcat_len = self.feature_num * self.num_data_channel
@@ -91,7 +91,7 @@ class TDNN_LSTM(nn.Module):
         self.lstm1 = nn.LSTM(
             input_size=256,
             hidden_size=128,
-            num_layers=2,
+            num_layers=self.num_layers,
             batch_first=True,
             dropout=self.args["dropout"],
             proj_size=0)
@@ -105,8 +105,8 @@ class TDNN_LSTM(nn.Module):
             nn.Linear(in_features=32, out_features=1, bias=True)
         )
 
-        self.hidden = ((torch.zeros(2, self.args["batch_size"], 128).to(device),
-                        torch.zeros(2, self.args["batch_size"], 128).to(device)))
+        self.hidden = ((torch.zeros(self.num_layers, self.args["batch_size"], 128).to(device),
+                        torch.zeros(self.num_layers, self.args["batch_size"], 128).to(device)))
 
     def forward(self, x):
         #x = x.permute(0, 2, 1)
@@ -133,5 +133,5 @@ class TDNN_LSTM(nn.Module):
         return logit, self.hidden
 
     def init_state(self, device):
-        self.hidden = ((torch.zeros(2, self.args["batch_size"], 128).to(device),
-                        torch.zeros(2, self.args["batch_size"], 128).to(device)))
+        self.hidden = ((torch.zeros(self.num_layers, self.args["batch_size"], 128).to(device),
+                        torch.zeros(self.num_layers, self.args["batch_size"], 128).to(device)))

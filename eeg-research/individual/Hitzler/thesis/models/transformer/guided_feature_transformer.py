@@ -26,7 +26,7 @@ class GFT(nn.Module):
         self.hidden_dim = 256
         self.dropout = args["dropout"]
         self.num_data_channel = 1
-        enc_model_dim = 128
+        enc_model_dim = 256
 
         activation = 'relu'
         self.activations = nn.ModuleDict([
@@ -54,25 +54,26 @@ class GFT(nn.Module):
                 nn.MaxPool2d(kernel_size=(1,2), stride=(1,2)),
         )
         transformer_d_input = 1536
-        block_mask = torch.tensor([[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
-                                [0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,	1, 0, 0, 0, 0, 0, ],
-                                [1, 0, 1, 0, 1,	0, 0, 0, 1, 0, 0, 0, 0,	0, 0, 0, 0, 0, 0, ],
-                                [0, 1, 0, 1, 0,	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
-                                [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
-                                [0, 0, 0, 1, 0,	1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
-                                [0, 0, 0, 0, 1,	0 ,1 ,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, ],
-                                [0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
-                                [0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, ],
-                                [0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, ],
-                                [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, ],
-                                [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0, ],
-                                [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, ],
-                                [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, ],
-                                [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, ],
-                                [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, ],
-                                [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, ],
-                                [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, ],
-                                [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, ]]).to(device)
+        block_mask = torch.tensor([[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+                                [0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,	1, 0, 0, 0, 0, 0, 0],
+                                [1, 0, 1, 0, 1,	0, 0, 0, 1, 0, 0, 0, 0,	0, 0, 0, 0, 0, 0, 0],
+                                [0, 1, 0, 1, 0,	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                                [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                                [0, 0, 0, 1, 0,	1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                                [0, 0, 0, 0, 1,	0 ,1 ,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+                                [0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                                [0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0],
+                                [0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0],
+                                [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0],
+                                [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0, 0],
+                                [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0],
+                                [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0],
+                                [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0],
+                                [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0],
+                                [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0],
+                                [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1],
+                                [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0],
+                                [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1]]).to(device)
         self.transformer_encoder = TransformerEncoder(
             d_input=transformer_d_input,
             n_layers=4,
@@ -86,33 +87,30 @@ class GFT(nn.Module):
         )
         self.agvpool = nn.AdaptiveAvgPool1d(1)
 
-        self.hidden = ((torch.zeros(1, args["batch_size"], 19).to(device),
-                        torch.zeros(1, args["batch_size"], 19).to(device)))
+        self.hidden = ((torch.zeros(1, args["batch_size"], 20).to(device),
+                        torch.zeros(1, args["batch_size"], 20).to(device)))
 
         self.positional_encoding = PositionalEncoding(256, max_len=10)
         self.pe_x = self.positional_encoding(6).to(device)
 
         self.lstm = nn.LSTM(
-            input_size=19,
-            hidden_size=19,
+            input_size=20,
+            hidden_size=20,
             num_layers=1,
             batch_first=True)
 
         self.classifier = nn.Sequential(
-            nn.Linear(in_features=19, out_features=1, bias=True),
+            nn.Linear(in_features=20, out_features=1, bias=True),
         )
 
     def forward(self, x):
-        if self.feature_extractor != "raw":
-            x = self.feat_model(x)
-            x = x.reshape(x.size(0), -1, x.size(3)).unsqueeze(1)
-        else:
-            x = x.unsqueeze(1)
+
+        x = x.unsqueeze(1)
 
         x = self.features(x).permute(0, 2, 3, 1)
 
         x = x + self.pe_x.unsqueeze(0)
-        x = x.reshape(x.size(0), 19, -1)
+        x = x.reshape(x.size(0), 20, -1)
         x = self.transformer_encoder(x)
         x = self.agvpool(x)
         self.hidden = tuple(([Variable(var.data) for var in self.hidden]))
@@ -121,5 +119,5 @@ class GFT(nn.Module):
         return output, self.hidden
 
     def init_state(self, device):
-        self.hidden = ((torch.zeros(1, self.args["batch_size"], 19).to(device),
-                        torch.zeros(1, self.args["batch_size"], 19).to(device)))
+        self.hidden = ((torch.zeros(1, self.args["batch_size"], 20).to(device),
+                        torch.zeros(1, self.args["batch_size"], 20).to(device)))

@@ -159,8 +159,7 @@ class MobileNetV3(nn.Module):
 
         mode = 'large'
         self.num_classes = 1
-        self.width_mult = 1.
-        self.num_data_channel = self.args["num_channels"]  # 20
+        self.width_mult = 0.5
 
         # assert mode in ['large', 'small']
 

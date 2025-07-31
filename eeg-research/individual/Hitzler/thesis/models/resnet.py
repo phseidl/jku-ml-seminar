@@ -40,16 +40,15 @@ class RESNET18_CONV2D(nn.Module):
         num_blocks = [2, 2, 2, 2]
         block = BasicBlock
         self.in_planes = 64
-        self.in_channels = args["num_channels"]
 
 
         self.conv1 = nn.Conv2d(1, 64, kernel_size=(1, 51), stride=(1, 4), padding=(0, 25), bias=False)
 
         self.bn1 = nn.BatchNorm2d(64)
-        self.layer1 = self._make_layer(block, 64, num_blocks[0], self.is_psd, stride=1)
-        self.layer2 = self._make_layer(block, 128, num_blocks[1], self.is_psd, stride=2)
-        self.layer3 = self._make_layer(block, 256, num_blocks[2], self.is_psd, stride=2)
-        self.layer4 = self._make_layer(block, 256, num_blocks[3], self.is_psd, stride=2)
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], False, stride=1)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], False, stride=2)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], False, stride=2)
+        self.layer4 = self._make_layer(block, 256, num_blocks[3], False, stride=2)
         self.fc1 = nn.Linear(4 * 256 * block.expansion, 1)
 
         self._initialize_weights()
