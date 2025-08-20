@@ -1,6 +1,6 @@
 Comparative Analysis of Deep Neural Networks for EEG-Based Real-Time Seizure Detection
 ========================================================================================
-**Johannes Kepler University** - Bachelor's Thesis 2025 
+**Johannes Kepler University** - Bachelor's Thesis 2025 \
 **Supervisor**: Dr. Philipp Seidl, MSc \
 **Author**: Florian Hitzler
 
@@ -38,8 +38,8 @@ The code is structured as follows:
 
 ## Configuration
 
-The configuration files are stored in the `configs/` directory. The `config.json` file contains the hyperparameters for the models. 
-The `train.json` and `valid.json` files contain the paths to the training and validation data respectively. 
+The configuration files are stored in the `configs/` directory. The `config.json` file contains global hyperparameters for the models. \
+The `train.json` and `valid.json` files contain the paths to the training and validation data respectively. \
 The `test.json` file contains the paths to the test data.
 
 | Parameter       | Description                                                                    | File                              |
@@ -49,7 +49,7 @@ The `test.json` file contains the paths to the test data.
 | epochs          | The number of epochs to train for                                              | config.json                       |
 | lr_init         | The learning rate to use for training                                          | config.json                       |
 | dropout         | The dropout rate                                                               | config.json                       |
-| num_layers      | The number of lstm layers                                                      | config.json                       |
+| num_layers      | The number of lstm layers (for lstm based models)                              | config.json                       |
 | sample_rate     | The sample rate of the data (as specified in preprocessing.py, default is 200) | config.json                       |
 | val_interval    | The validation interval given as decimal percent                               | config.json                       |
 | log_interval    | The logging interval in number of steps                                        | config.json                       |
@@ -75,9 +75,9 @@ Here are examples of how to run the preprocessing scripts for both datasets:
 python preprocessingTUH.py --data_dir <path_to_data> --save_location <save_location> --channels <channel1, channel2> --alternative_channel_names <alternative_channel1, alternative_channel2>
 ```
 
-The `--data_dir` argument specifies the path to the data directory. 
-The `--save_location` argument specifies the location where the preprocessed data should be saved. 
-The `--channels` argument specifies the channels to use for preprocessing. All the channel names have to be present in the data.
+The `--data_dir` argument specifies the path to the data directory. \
+The `--save_location` argument specifies the location where the preprocessed data should be saved. \
+The `--channels` argument specifies the channels to use for preprocessing. All the channel names have to be present in the data.\
 The `--alternative_channel_names` argument specifies the alternative channel names to use if the first set of channels don't exist.
 
 Here is an example of how to run the preprocessing script:
@@ -95,9 +95,10 @@ The preprocessing script for the CHB-MIT dataset is similar, but it does not req
 python preprocessingMIT.py --data_dir <path_to_data> --save_location <save_location> --channels <channel1, channel2> 
 ```
 
-The `--data_dir` argument specifies the path to the data directory.
-The `--save_location` argument specifies the location where the preprocessed data should be saved.
+The `--data_dir` argument specifies the path to the data directory.\
+The `--save_location` argument specifies the location where the preprocessed data should be saved. \
 The `--channels` argument specifies the channels to use for preprocessing. All the channel names have to be present in the data.
+
 Here is an example of how to run the preprocessing script:
 ```
 python preprocessingMIT.py --data_dir "data/mit/raw" --save_location "data/mit/processed" --channels "FP1-F7, F7-T7, T7-P7, P7-O1, FP1-F3, F3-C3, T8-P8-0, C3-P3, P3-O1, FP2-F4, F4-C4, C4-P4, P4-O2, FP2-F8, F8-T8, P8-O2, FZ-CZ, CZ-PZ, P7-T7, T7-FT9"

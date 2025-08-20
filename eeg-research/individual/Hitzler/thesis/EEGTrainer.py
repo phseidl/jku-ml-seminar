@@ -102,7 +102,7 @@ class EEGTrainer(nn.Module):
         for epoch in range(self.args["epochs"]):
             self.model.train()
             train_losses = []
-            if early_stopping > 5:
+            if early_stopping >= 5:
                 break
             for i, (data, label) in tqdm(enumerate(self.trainloader), desc=f"Epoch {epoch}",
                                          total=len(self.trainloader), position=0):
@@ -129,7 +129,7 @@ class EEGTrainer(nn.Module):
 
                     loss = self.main_loss(outputs, targets_window)
                     loss.backward(loss)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
                     self.optimizer.step()
 
                     train_losses.append(loss.item())
@@ -183,7 +183,7 @@ class EEGTrainer(nn.Module):
                         early_stopping = 0
                     else:
                         early_stopping += 1
-                    if early_stopping > 5:
+                    if early_stopping >= 5:
                         print("Early stopping")
                         break
                     self.model.train()

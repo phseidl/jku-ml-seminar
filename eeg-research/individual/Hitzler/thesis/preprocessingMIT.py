@@ -137,8 +137,8 @@ if __name__ == '__main__':
     parser.add_argument('--channels', type=str,
                         default='FP1-F7, F7-T7, T7-P7, P7-O1, FP2-F8, F8-T8, T8-P8-0, P8-O2, P7-T7, T7-FT9, C3-P3, P3-O1, FT9-FT10, FT10-T8, C4-P4, P4-O2')
     args = parser.parse_args()
-    data_dir = '/mnt/cache/data/MIT/raw/all'
-    save_location = '/mnt/cache/data/MIT/processed/all'
+    data_dir = args.data_dir
+    save_location = args.save_location
     channels = [channel.strip() for channel in args.channels.split(',')]
 
     process_data(data_dir, save_location, channels)
