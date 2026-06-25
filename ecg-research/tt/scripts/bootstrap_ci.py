@@ -88,11 +88,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-# roc_auc_score is all the bootstrap math itself needs; torch is imported
-# eagerly only because --checkpoint mode hands off to inference. The whole
-# checkpoint-evaluation stack (model build, dataset loaders, run_inference) is
-# imported lazily inside _from_checkpoint, so the much cheaper --labels/--scores
-# path runs without paying for the torch model/dataset import graph.
+
 from sklearn.metrics import roc_auc_score
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

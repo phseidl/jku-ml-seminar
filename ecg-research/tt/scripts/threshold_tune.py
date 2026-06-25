@@ -52,12 +52,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-# roc_auc_score and average_precision_score are ranking metrics: they integrate
-# over every possible cutoff, so they do not depend on the threshold I pick. I
-# report them (unchanged) next to the tuned binary-decision numbers as a sanity
-# anchor -- if AUROC ever differed between the baseline-at-0.5 block and the
-# tuned block, the two evaluations would be scoring different probabilities and
-# something is wrong.
+
 from sklearn.metrics import roc_auc_score, average_precision_score
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

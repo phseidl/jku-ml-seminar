@@ -34,9 +34,6 @@ from torch.utils.data import DataLoader
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Fallback data paths, read from config.yaml so the data location lives in one
-# place. Used only when a checkpoint's result.json omits the paths; override on
-# the command line for a one-off run pointing somewhere else.
 _CFG = OmegaConf.load(PROJECT_ROOT / "config" / "config.yaml")
 _DEFAULT_PTBXL_DATA_DIR    = str(_CFG.data.data_dir)
 _DEFAULT_PTBXL_CACHE_DIR   = str(_CFG.data.cache_dir)

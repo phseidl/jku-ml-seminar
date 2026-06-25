@@ -11,10 +11,7 @@ One-time builder for the on-disk STFT feature cache used by PTB-XL training.
 """
 
 import os
-import ast            # NOTE: imported but unused here; the dataset module uses
-                      # ast.literal_eval to parse scp_codes. Kept only to mirror
-                      # the dataset's import block. NOTE: drop it if matching
-                      # dataset.py stops being a goal.
+
 import argparse
 from pathlib import Path
 
