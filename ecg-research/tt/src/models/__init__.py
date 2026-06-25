@@ -1,0 +1,1 @@
+"""The 'src.models' package -- home of the xLSTM-ECG network. The model itself lives in 'xlstm_ecg.py' ('XLSTMECGModel'); this file is just a package marker, since callers import that submodule directly."""

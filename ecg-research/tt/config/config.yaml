@@ -1,0 +1,234 @@
+# =============================================================================
+# config.yaml -- the single source of truth for every setting in this project.
+#
+# How the whole repository works, in one idea: every experiment is the SAME
+# code run with a DIFFERENT set of values. One training run reads this file;
+# the sweep scripts never edit it -- they launch run_training as a subprocess
+# and pass 'key=value' overrides on the command line, which win over the
+# defaults here. So to reproduce or vary an experiment you change a value below
+# or pass an override, and never touch the training code itself.
+#
+# The committed defaults reproduce Section 4.3 of the original study (Kang et
+# al., 2025) on PTB-XL, together with the one label rule we judged faithful to
+# it (lik_eq_100, explained under data.label_aggregation).
+#
+# BEFORE YOU RUN ANYTHING: set data.root to wherever you downloaded the data.
+# Every dataset path is built from it, so that is normally the only line you
+# need to change.
+# =============================================================================
+
+data:
+
+  # ADJUST THIS. Single base folder for the datasets and their caches; the four
+  # paths below are derived from it, so changing this one line repoints all of
+  # them. (You can still override any single path on the command line, e.g.
+  # data.data_dir=/elsewhere/ptb-xl.)
+  root: /data/nvme1n1
+
+  # PTB-XL release root: the unpacked folder holding ptbxl_database.csv,
+  # scp_statements.csv and the records100/ waveform tree.
+  data_dir: ${data.root}/ptb-xl-1.0.3
+
+  # Folder of cached per-record STFT spectrograms (.npy). Built on first use if
+  # absent; pre-fill it with scripts/precompute_stft.py for a fast first epoch.
+  # It must be rebuilt if you change data.nfft, since the cached array shape
+  # depends on the FFT length.
+  cache_dir: ${data.root}/ptb-xl-stft-cache
+
+  # Signal sampling rate in Hz. 100 selects PTB-XL's 100 Hz recordings (the
+  # filename_lr column); the STFT settings and the resulting 59 time frames are
+  # all tuned for 100 Hz. 500 would use the high-resolution set instead.
+  fs: 100
+
+  # Records per forward/backward pass. Larger trains faster on a large GPU but
+  # uses more memory; the last batch of an epoch may be smaller (the leftover
+  # records after dividing the split into groups of this size).
+  batch_size: 1024
+
+  # Background DataLoader processes that read and STFT records in parallel.
+  # Roughly the number of CPU cores you can spare.
+  num_workers: 16
+
+  # Which dataset to train on: 'ptbxl' (5 diagnostic superclasses) or 'georgia'
+  # (7 rhythm/conduction classes). Switches the loader and the class names.
+  dataset_type: ptbxl                   # ptbxl | georgia
+
+  # The PTB-XL label rule -- one of the two decisions the original study leaves
+  # unstated. PTB-XL does not give one clean class per record; each carries SCP
+  # codes with a confidence (0-100). This setting decides how those become a
+  # yes/no label:
+  #   lik_gt_0        -- any code with confidence above 0 counts (multi-label).
+  #   lik_eq_100      -- only fully-confident codes (confidence == 100) count;
+  #                      cleaner labels, higher AUROC, and the closest match to
+  #                      the original study's reported class counts. <- our default.
+  #   primary_max_lik -- one class per record: the single highest-confidence code.
+  label_aggregation: lik_eq_100         # lik_gt_0 | lik_eq_100 | primary_max_lik
+
+  # Georgia release root (used only when dataset_type=georgia): the folder
+  # containing the g1/ ... g11/ group subfolders.
+  georgia_dir: ${data.root}/georgia-12-lead-ecg-challenge-1.0.2/training/georgia
+
+  # Cache of Georgia STFT spectrograms, keyed by group/stem.
+  georgia_cache_dir: ${data.root}/georgia-stft-cache
+
+  # How Georgia is split into train/test. 'paper_strict' follows Section 4.7 of
+  # the original study: test on group g1, train on g2..g11, no validation set.
+  # 'default' is a different internal split (g2 held out for validation).
+  georgia_split_strategy: paper_strict  # default | paper_strict
+
+  # Many Georgia records carry none of the 7 target classes. true = drop those
+  # records (the choice whose numbers match the original study); false = keep
+  # them as all-negative examples (a larger but noisier training set).
+  georgia_drop_no_target_codes: true
+
+  # FFT length for the per-lead STFT. It sets the number of frequency bins,
+  # F = nfft/2 + 1 (480 -> 241), and therefore the model input width. The
+  # original study's Table 2 searches 240 / 360 / 480 / 512 and picks 480 as the
+  # best; we reproduce that sweep in scripts/sweep_nfft_ablation.py. The 59 time
+  # frames are fixed by the window/hop and do NOT depend on this. Change only
+  # alongside a freshly built cache at the matching length.
+  nfft: 480
+
+model:
+
+  # Features the model sees per time step = 12 leads x 241 frequency bins. This
+  # is derived from nfft; train.py recomputes it as 12*(nfft/2+1) and overrides
+  # whatever is written here, so the data shape and the model width can never
+  # drift apart. Left explicit only for readability.
+  input_size: 2892
+
+  # Width of the hidden vector inside each xLSTM block -- the model's capacity
+  # knob. Section 4.3 of the original study; the results-matching recipe widens
+  # it to 512.
+  embedding_dim: 256
+
+  # Depth: how many xLSTM blocks are stacked in EACH of the two branches
+  # (one sLSTM stack, one mLSTM stack). Section 4.3; results-matching uses 4.
+  num_blocks: 2
+
+  # Processing heads per block.
+  num_heads: 4
+
+  # Number of output classes (one sigmoid head each). 5 for PTB-XL; set to 7
+  # when training Georgia.
+  num_classes: 5
+
+  # Fraction of units randomly zeroed during training, to limit overfitting.
+  # Section 4.3 value; the results-matching recipe lowers it to 0.1.
+  dropout: 0.5
+
+  # Which sLSTM implementation to use. 'cuda' is the fast compiled GPU kernel
+  # (needs a system CUDA compiler, nvcc, on first use); 'vanilla' is a slow
+  # pure-PyTorch fallback used by the CPU unit tests.
+  slstm_backend: cuda                   # cuda | vanilla
+
+  # How the two branches are handled. The original study defines two fusion
+  # strategies: 'layer' (default, eq. 13) averages the sLSTM and mLSTM after
+  # every block and feeds the average back into both, and 'sequential' (eq. 12)
+  # averages them once at the very end. 'slstm_only' / 'mlstm_only' instead run
+  # a single branch with no fusion. All four are the rows of the study's Table 5
+  # ablation (standalone sLSTM, standalone mLSTM, sequential, layer).
+  fusion_type: layer                    # layer | sequential | slstm_only | mlstm_only
+
+  # Fraction of time frames zeroed when a record is masked (training-time
+  # augmentation). Table 3 of the original study.
+  mask_ratio: 0.2
+
+  # Probability that masking is applied to a given record. Table 4 of the
+  # original study.
+  mask_prob: 0.8
+
+  # How the per-frame vectors collapse into one record vector before the heads.
+  # 'mean' averages over the 59 time frames; 'attention'/'last' are alternatives.
+  pooling: "mean"                       # mean | attention | last
+
+training:
+
+  # Base learning rate (Section 4.3 of the original study).
+  learning_rate: 0.0002
+
+  # Optimizer. 'adam' is the original study's choice; 'adamw' decouples weight
+  # decay.
+  optimizer: "adam"                     # adam | adamw
+
+  # L2 weight penalty. 0 = off (Section 4.3).
+  weight_decay: 0.0
+
+  # How the learning rate changes over epochs. 'step' is the original study's
+  # StepLR; the others were tried during our search.
+  lr_scheduler: "step"                  # step | reduce_lr | cosine_warmup | cosine | onecycle
+
+  # With StepLR: drop the learning rate every this many epochs.
+  step_lr_step_size: 2
+
+  # With StepLR: multiply the learning rate by this factor at each drop.
+  step_lr_gamma: 0.8
+
+  # Warmup length, used only when lr_scheduler=cosine_warmup.
+  warmup_epochs: 10
+
+  # Peak learning rate, used only when lr_scheduler=onecycle.
+  lr_max_onecycle: 0.001
+
+  # Plateau-scheduler decay factor, used only when lr_scheduler=reduce_lr.
+  lr_decay_factor: 0.5
+
+  # Plateau-scheduler patience, used only when lr_scheduler=reduce_lr.
+  lr_scheduler_patience: 5
+
+  # Stop after this many epochs with no improvement in validation macro-AUROC.
+  # 5 = the main result; use 2 for the faster Table 2-4 ablation searches, and
+  # 999 (effectively never) for the fixed-length Georgia runs.
+  early_stopping_patience: 5
+
+  # Maximum epochs; early stopping normally ends a run well before this. Use 20
+  # for the Georgia runs.
+  num_epochs: 500
+
+  # Where the model trains. 'cuda' = GPU; 'cpu' is for the tests only.
+  device: cuda
+
+  # How each input batch is scaled before the model. 'zero_mean_unit_var' is a
+  # per-sample z-score; 'per_channel' normalizes each lead separately; 'none'
+  # leaves the spectrogram magnitudes untouched.
+  normalization: "zero_mean_unit_var"   # none | per_channel | zero_mean_unit_var
+
+  # Training loss. 'bce' (binary cross-entropy) is the original study's choice;
+  # the others were tried but not used in any reported number.
+  loss_fn: "bce"                        # bce | focal | bce_smooth | bce_weighted
+
+  # Focal-loss shape parameter, used only when loss_fn=focal.
+  focal_gamma: 2.0
+
+  # Focal-loss class-balance parameter, used only when loss_fn=focal.
+  focal_alpha: 0.25
+
+  # Label-smoothing amount, used only when loss_fn=bce_smooth.
+  label_smoothing: 0.1
+
+  # Cap the gradient norm at this value each step, for training stability.
+  # 0.0 disables clipping.
+  grad_clip_max_norm: 1.0
+
+  # If set to a path, train() writes a per-run metrics JSON there at the end.
+  # The sweeps set this for every run so they can collect results; a plain
+  # interactive run leaves it empty and writes none.
+  result_file: ""
+
+  # Random seed -- fixes weight initialization, data shuffling and the masks.
+  # One run uses one seed; the reported numbers average ten of them.
+  seed: 42
+
+  # Output folders, relative to the working directory (the package root). Pass
+  # absolute paths via override if that is more convenient.
+  checkpoint_dir: checkpoints
+
+  log_dir: logs
+
+evaluation:
+
+  # PTB-XL fold held out as the final test set (the standard 10-fold protocol).
+  test_fold: 10
+
+  # PTB-XL fold used for validation and early stopping.
+  val_fold: 9

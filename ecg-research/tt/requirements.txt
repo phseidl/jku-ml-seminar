@@ -1,0 +1,16 @@
+# torch 2.11.0+cu130 is a CUDA-local-version wheel hosted on the PyTorch index,
+# not on PyPI; this extra index lets `pip install -r requirements.txt` resolve it.
+--extra-index-url https://download.pytorch.org/whl/cu130
+einops==0.8.2
+matplotlib==3.10.9
+ninja==1.13.0
+numpy==2.4.3
+omegaconf==2.3.0
+pandas==3.0.2
+pytest==9.0.3
+scikit-learn==1.8.0
+scipy==1.17.1
+torch==2.11.0+cu130
+tqdm==4.67.3
+wfdb==4.3.1
+xlstm==2.0.5
