@@ -80,7 +80,6 @@ Change `data.root` (or override any single path on the command line, e.g. `data.
 ## Installation
 
 ```bash
-cd submission
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt          # or requirements-lock.txt for a pinned, bit-reproducible env
