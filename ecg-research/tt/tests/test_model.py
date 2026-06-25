@@ -4,24 +4,6 @@ tests/test_model.py
 CPU-only contract tests for 'XLSTMECGModel' (the network in
 'src/models/xlstm_ecg.py').
 
-A pytest module that pins the model's output contract -- the three facts the
-rest of the training and evaluation code quietly trusts:
-
-  1. Shape: a batch of '(B, T, input_size)' STFT features comes back as
-     '(B, num_classes)'. If this drifts, every downstream 'compute_metrics'
-     call (AUROC, confusion matrix) either breaks or, worse, silently lines up
-     the wrong class with the wrong probability and reports a plausible-looking
-     number that is wrong.
-  2. Range: every output sits in '[0, 1]'. The model ends in a sigmoid, so each
-     class gets its own independent probability (a patient can carry several
-     diagnoses at once -- multi-label). The training loop's BCE loss and the
-     0.5 decision threshold both assume probabilities, not raw logits.
-  3. Finiteness: no NaNs escape. The production sLSTM CUDA kernel runs in
-     bfloat16 and can emit NaN on degenerate inputs -- which is why
-     'train.py' wraps every batch in 'nan_to_num'. This test confirms the
-     vanilla path is clean to begin with, so when a NaN does show up in a real
-     run I know to blame the kernel or the data.
-
     pytest                                 # whole suite (this file included)
     pytest tests/test_model.py             # just this file
     pytest tests/test_model.py::test_model_output_shape   # one test
@@ -39,11 +21,6 @@ from src.models.xlstm_ecg import XLSTMECGModel
 
 def get_test_config():
     """Build the minimal 'cfg.model' subtree the model needs, sized for speed.
-
-    'XLSTMECGModel.__init__' reads only the 'cfg.model.*' keys.
-
-    The values are the smallest that still keep the dimension contract intact,
-    so the three tests build and run in well under a second on CPU.
 
     Returns
     -------
@@ -97,12 +74,6 @@ def test_model_output_range():
 
 def test_model_no_nan():
     """Finiteness contract: the forward pass produces no NaNs on clean input.
-
-    On random, well-conditioned input the vanilla backend should never emit NaN.
-    (The production CUDA kernel runs in bfloat16 and can, which is why the
-    training loop wraps every batch in 'nan_to_num'. This test isolates the
-    model graph itself, so a NaN seen in a real run points to the kernel or the
-    data.)
     """
     cfg = get_test_config()
     model = XLSTMECGModel(cfg)

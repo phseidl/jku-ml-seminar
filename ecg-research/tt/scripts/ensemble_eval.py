@@ -6,31 +6,6 @@ checkpoints (each one a different seed of the same recipe) and report the
 same metrics as evaluate_checkpoint.py, but computed on the averaged
 scores instead of a single seed.
 
-1. Check the members are comparable. Every checkpoint must come from
-   the same dataset and the same class set. I assert this from each
-   checkpoint's companion result.json config snapshot, because a PTB-XL
-   model and a Georgia model are scoring entirely different diagnoses and
-   must never be pooled.
-2. Load the test split with evaluate_checkpoint.load_test_dataset,
-   which threads label_aggregation / nfft / georgia_split_strategy /
-   georgia_drop_no_target_codes through from the run config so the test
-   set is built exactly as it was at training time.
-3. For each checkpoint:
-   - load the model
-   - run inference on the test set (the same un-augmented eval pipeline
-     train.py's evaluate() uses)
-   - record that seed's AUROC (a sanity check, and reported in the JSON)
-   - add its sigmoid scores into the running sum
-4. Average the scores -- the plain arithmetic mean of the per-seed
-   sigmoid outputs.
-5. Run the full metric battery (compute_all_metrics, shared with
-   evaluate_checkpoint.py) on the averaged scores: macro AUROC, F1,
-   precision, recall, MAP, plus per-class AUROC, per-class confusion
-   matrices, and label co-occurrence.
-6. Save the metrics JSON alongside two sidecar arrays,
-   <out>_labels.npy and <out>_scores.npy, so bootstrap_ci.py can put
-   confidence intervals on the ensemble without re-running inference.
-
 Usage
 -----
 Basic (10-seed ensemble of the results_matching PTB-XL recipe):
@@ -76,25 +51,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-# Resolve the package root (.../practical_work) two levels up from this file
-# (scripts/ensemble_eval.py -> scripts/ -> practical_work/) and put it on the
-# import path. This makes 'python -m scripts.ensemble_eval' and a bare
-# 'python scripts/ensemble_eval.py' both able to import the 'scripts.*' and
-# 'src.*' packages, regardless of the caller's working directory.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# I reuse the single-checkpoint evaluation primitives rather than re-deriving
-# them here, so each member's inference path is byte-for-byte the one
-# evaluate_checkpoint.py (and bootstrap_ci.py) use. That is what lets a per-seed
-# AUROC reported here match a standalone re-eval of the same checkpoint. See
-# scripts/evaluate_checkpoint.py for each function.
-
-#   load_run_config    -- reads the run's companion result.json config snapshot
-#   load_model         -- builds XLSTMECGModel and loads the "model" state dict
-#   load_test_dataset  -- builds the PTB-XL or Georgia test split from the config
-#   run_inference      -- returns (labels, scores) numpy arrays, sigmoid applied
-#   compute_all_metrics-- the full metric battery shared with train.py
 from scripts.evaluate_checkpoint import (
     load_run_config,
     load_model,

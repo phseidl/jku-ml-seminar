@@ -30,11 +30,6 @@
 #                     e.g. to point at where YOU downloaded the data (no spaces
 #                     inside a path). PTB-XL paths also live in config/config.yaml.
 #
-# EXACTNESS: the bfloat16 sLSTM CUDA kernel is non-deterministic across separate
-# processes (~0.005-0.015 macro-AUROC drift; see the report's non-determinism
-# section), so regenerated numbers land WITHIN the published bootstrap CI, not
-# bit-exact. Always read multi-seed mean +/- std and the CI, never one number.
-#
 # RESUMABILITY: a seed whose result.json already exists is skipped; delete its
 # results/repro_*/s<seed>/result.json to force a retrain. Training writes to
 # results/repro_*/ (gitignored output, not part of the code).

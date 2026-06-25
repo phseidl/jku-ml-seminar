@@ -38,10 +38,6 @@ class AttentionPooling(nn.Module):
     the head lean on the beats or frequency moments it finds most informative
     instead of treating every time step equally.
 
-    Used when 'cfg.model.pooling = "attention"'. The default is mean pooling,
-    which is parameter-free and what the original study uses (Section 3.5,
-    eq. 14); attention is offered as an ablation.
-
     Parameters
     ----------
     dim : int
@@ -54,7 +50,6 @@ class AttentionPooling(nn.Module):
 
     def __init__(self, dim: int):
         super().__init__()
-        # One learned linear from D -> 1, applied per time-step.
         self.attn = nn.Linear(dim, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -69,10 +64,8 @@ class AttentionPooling(nn.Module):
         -------
         torch.Tensor of shape (B, D): the per-sequence attention-weighted sum.
         """
-        # x: (B, T, D)
-        # self.attn(x) scores every time step -> (B, T, 1).
-        # softmax over dim=1 (the T axis) so the T weights
-        # for each sequence form a prob dist that sums to 1.
+        # self.attn(x) scores every time step -> (B, T, 1); softmax over dim=1
+        # (the T axis) makes the T weights a prob dist that sums to 1.
         w = torch.softmax(self.attn(x), dim=1)   # (B, T, 1)
 
         # Broadcast-multiply the weights back onto the embeddings and sum over
@@ -131,21 +124,7 @@ class XLSTMECGModel(nn.Module):
             cfg.model.input_size, cfg.model.embedding_dim
         )
 
-        # Single shared dropout module -- applied once after the input
-        # projection and once after pooling. Section 4.3 of the original study
-        # specifies dropout=0.5; my adjusted recipe uses 0.1 instead, which
-        # closes the PTB-XL gap.
-        # NOTE: one shared Dropout instance is reused at both sites. That is
-        # intentional (identical p, and Dropout is stateless apart from the
-        # train/eval flag). Different rates at the two sites would need two
-        # separate modules.
         self.dropout = nn.Dropout(p=cfg.model.dropout)
-
-        # Backend for the sLSTM cell. "cuda" uses CUDA kernel
-        # (fast, recompiles on shape change, runs in bfloat16); "vanilla" is a
-        # pure-PyTorch fallback used by the tests so they need no GPU. The
-        # mLSTM stack has no CUDA-only path, so only the sLSTM branch reads
-        # this knob.
         slstm_backend = cfg.model.slstm_backend
 
         # -- 3a. sLSTM block stack (parallel branch #1) -----------------------
@@ -158,11 +137,13 @@ class XLSTMECGModel(nn.Module):
                 slstm=sLSTMLayerConfig(
                     backend=slstm_backend,
                     num_heads=cfg.model.num_heads,
+
                     # conv1d_kernel_size=4: a short causal depthwise conv on the
                     # gate pre-activations inside the sLSTM block. 4 is the
                     # xlstm default and the original study's setting; it gives a
                     # small local-context window before the recurrence.
                     conv1d_kernel_size=4,
+
                     # 'powerlaw_blockdependent' initializes the forget-gate bias
                     # so deeper blocks start biased toward longer memory -- a
                     # library-recommended init that stabilizes the sLSTM
@@ -191,8 +172,8 @@ class XLSTMECGModel(nn.Module):
         )
         # NOTE: context_length is hardcoded to 59 in both stack configs. The
         # library uses it only to size internal buffers, and it must equal the
-        # STFT time dimension T; if nperseg/noverlap ever change (shifting T)
-        # this constant must change with them.
+        # STFT time dimension T.
+
         # I pull '.blocks' (a ModuleList) instead of using the full
         # xLSTMBlockStack so I can drive fusion at each layer myself. The
         # container's own call would run every block end-to-end with no hook
@@ -216,10 +197,7 @@ class XLSTMECGModel(nn.Module):
                     qkv_proj_blocksize=4,
                     num_heads=cfg.model.num_heads,
                 ),
-                # NOTE: no FeedForwardConfig here, unlike the sLSTM block. In
-                # this library the mLSTM block carries its own internal
-                # projection and takes no separate feed-forward sub-layer in
-                # the original study's configuration; I keep that asymmetry.
+
             ),
             context_length=59,                        # must match the sLSTM stack
             num_blocks=self.num_blocks,
@@ -287,9 +265,8 @@ class XLSTMECGModel(nn.Module):
         0.5 (or per-class tuned thresholds, see 'scripts/threshold_tune.py').
         """
         # -- Input projection + dropout --------------------------------------
-        # Shape change: (B, T, input_size) -> (B, T, embedding_dim).
-        # This is the only place input_size is consumed; after this line every
-        # tensor in the network has channel dim == embedding_dim.
+        # The only place input_size is consumed; after this line every tensor in
+        # the network has channel dim == embedding_dim.
         x = self.input_projection(x)
         x = self.dropout(x)
 
@@ -312,7 +289,6 @@ class XLSTMECGModel(nn.Module):
                 x_m     = mlstm_block(x_fused)        # (B, T, embedding_dim)
                 # Average the two views and feed the result into the next depth.
                 x_fused = (x_s + x_m) / 2.0           # arithmetic mean
-                # NOTE: the average is unweighted.
 
         elif self.fusion_type == "sequential":
             # Sequential fusion (eq. 12 of the original study): each stack
@@ -339,9 +315,6 @@ class XLSTMECGModel(nn.Module):
             # study). The mLSTM blocks are still in the module tree (built
             # unconditionally) but never called -- they sit in eval mode with
             # their initial weights.
-            # Those unused parameters still load/save in the checkpoint, which
-            # is exactly what lets a single checkpoint be re-scored under a
-            # different fusion_type (see the class 'Construction vs. forward').
             x_fused = x
             for slstm_block in self.slstm_blocks:
                 x_fused = slstm_block(x_fused)        # chain blocks in place
@@ -383,9 +356,7 @@ class XLSTMECGModel(nn.Module):
 
         # -- Per-class linear classifiers (eq. 15 of the original study) -----
         # Each Linear emits one logit of shape (B, 1); concatenating C of them
-        # along dim=1 gives the (B, C) logit matrix. dim=1 (the class axis) is
-        # load-bearing -- concatenating along dim=0 would stack along the batch
-        # instead.
+        # along dim=1 gives the (B, C) logit matrix.
 
         logits = torch.cat([clf(v) for clf in self.classifiers], dim=1)
         return self.sigmoid(logits)

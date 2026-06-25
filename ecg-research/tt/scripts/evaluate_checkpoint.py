@@ -31,10 +31,6 @@ import torch
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
-# Make src.* importable no matter where this file is run from. __file__ is
-# .../submission/scripts/evaluate_checkpoint.py, so two parents up is the
-# project root (.../submission) that holds the src package. Inserting at
-# position 0 makes the local package win over any same-named installed one.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -47,14 +43,6 @@ _DEFAULT_PTBXL_CACHE_DIR   = str(_CFG.data.cache_dir)
 _DEFAULT_GEORGIA_DATA_DIR  = str(_CFG.data.georgia_dir)
 _DEFAULT_GEORGIA_CACHE_DIR = str(_CFG.data.georgia_cache_dir)
 
-# Fallback config for checkpoints saved before result.json carried one.
-# These are the locked sweep7 PTB-XL hyperparameters. Any checkpoint older than
-# config-saving is assumed to have been trained with exactly this
-# architecture/preprocessing, so the model can be rebuilt and its labels read
-# correctly. The five class names pin the index->class mapping used everywhere
-# downstream.
-# NOTE: PTB-XL only on purpose -- every Georgia checkpoint postdates config
-# saving, so there is no Georgia fallback to keep in sync here.
 _SWEEP7_FALLBACK = {
     "dataset_type":  "ptbxl",
     "class_names":   ["NORM", "MI", "STTC", "CD", "HYP"],

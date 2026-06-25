@@ -10,10 +10,6 @@ Source:
 
 """
 
-# NOTE: this module mixes os.path and pathlib.Path. Newer project code prefers
-# pathlib, but the on-disk record walk below predates that convention and is
-# left as-is to avoid churning behavior I have already verified; only the
-# cache-key handling uses Path.
 import os
 from pathlib import Path
 
@@ -27,11 +23,7 @@ from scipy.signal import stft as scipy_stft
 from torch.utils.data import Dataset
 
 # Class names in label-vector order (index 0..6). This list is the single
-# source of truth for the Georgia label ordering: GEORGIA_CLASSES[i] names the
-# diagnosis whose position is column i of the (7,) label vector, and every
-# consumer (train.py, evaluate_checkpoint.py, threshold_tune.py) imports it to
-# label per-class metrics. Reorder it and every reported number is silently
-# attached to the wrong diagnosis.
+# source of truth for the Georgia label ordering.
 GEORGIA_CLASSES = ["NSR", "AF", "IAVB", "LBBB", "RBBB", "SB", "STach"]
 
 # SNOMED-CT code (the literal string found in the .hea #Dx line) -> class
@@ -49,27 +41,9 @@ SNOMED_TO_IDX: dict[str, int] = {
     "427084000": 6,   # STach
 }
 
-# Derived once so the label-vector width and the class list can never drift
-# apart: the (7,) vectors in _build_label and the per-class print all key off
-# this one count.
 NUM_CLASSES = len(GEORGIA_CLASSES)
 
-# Group subfolders in data_dir; two split strategies are supported.
-#
-# "default": three-way split with g2 as a held-out validation set -- it lets
-#            the train loop track val AUROC, do early stopping, and pick the
-#            best epoch. This is the clinically sensible setup: model selection
-#            happens on records the model never trained on.
-#
-# "paper_strict": the exact split from Section 4.7 of the original study -- g1
-#            is the test set, all of g2..g11 are used for training, and there is
-#            no separate validation set. To keep the existing train loop happy
-#            (it always builds a val loader for per-epoch monitoring) the val
-#            split just re-uses the training records; val AUROC is therefore NOT
-#            a generalization signal in this mode and must not drive early
-#            stopping or model selection. Pair it with patience large enough
-#            that early stopping never fires (e.g. patience=999 and
-#            num_epochs=20, matching the original study).
+# Group folders.
 SPLIT_STRATEGIES: dict[str, dict[str, list[str]]] = {
     "default": {
         "test":  ["g1"],
@@ -138,10 +112,7 @@ def _build_label(snomed_codes: list[str]) -> np.ndarray:
     """Turn a list of SNOMED-CT code strings into a (7,) binary float32 label.
 
     Multi-label by design, which matches the clinic: one ECG can be coded with
-    several of the 7 diagnoses at once (e.g. atrial fibrillation with a bundle
-    branch block), so every matching code sets its own column to 1.0 and the
-    result may have more than one positive entry -- or none, if the record
-    carried no diagnosis among the 7.
+    several of the 7 diagnoses at once.
 
     Parameters
     ----------
@@ -229,23 +200,18 @@ class GeorgiaECGDataset(Dataset):
     def __init__(self, data_dir: str, split: str, cache_dir: str = None,
                  split_strategy: str = "default",
                  drop_no_target_codes: bool = True):
-        """Index the on-disk records for one split (loads no signal).
+        """Index the on-disk records for one split (loads no signal)."""
 
-        Construction is cheap and eager: it walks the relevant group folders,
-        parses every '.hea' header, builds the label vector, and decides
-        membership (kept vs. dropped). The signals/STFTs are loaded lazily in
-        '__getitem__', so building all three splits up front is fast.
-
-        See the class docstring for the meaning of every parameter.
-        """
         # Fail fast on a bad split/strategy name rather than silently building
         # an empty dataset that would only surface later as a baffling 0-sample
         # run.
         assert split in ("train", "val", "test"), f"Invalid split: {split!r}"
+
         assert split_strategy in SPLIT_STRATEGIES, (
             f"Unknown split_strategy: {split_strategy!r}. "
             f"Must be one of: {sorted(SPLIT_STRATEGIES)}"
         )
+
         self.data_dir              = data_dir
         self.cache_dir             = cache_dir
         self.split_strategy        = split_strategy
@@ -262,15 +228,19 @@ class GeorgiaECGDataset(Dataset):
         groups = SPLIT_STRATEGIES[split_strategy][split]
         for group in groups:
             group_dir = os.path.join(data_dir, group)
+
             # Tolerate a missing group folder (e.g. a partial download) by
             # skipping it rather than crashing -- the per-class print at the end
             # will flag an unexpectedly small N.
             if not os.path.isdir(group_dir):
                 continue
+
             # sorted() makes the record order determinstic across machines and
             # filesystems, so the cache layout and any index-based debugging
             # stay reproducible.
+
             for fname in sorted(os.listdir(group_dir)):
+
                 # Drive the walk off the .hea headers; each header has a sibling
                 # .mat signal file.
                 if not fname.endswith(".hea"):
@@ -301,6 +271,7 @@ class GeorgiaECGDataset(Dataset):
                   flush=True)
 
         self._records = records
+
         # Stack the per-record labels into one (N, 7) matrix. Exposed publicly
         # because consumers (pos_weight computation, class-balance checks) want
         # the whole label matrix without iterating __getitem__ and loading every
@@ -335,14 +306,6 @@ class GeorgiaECGDataset(Dataset):
         tuple[torch.Tensor, torch.Tensor]
             'x' : (12, 241, 59) float32 STFT magnitude (leads, freq, time).
             'y' : (7,) float32 multi-label target.
-
-        Notes
-        -----
-        The first access to a record computes the STFT and (if 'cache_dir' is
-        set) writes it to disk atomically; every later access reads the cached
-        '.npy' directly. The cache layout mirrors the data layout
-        ('cache_dir/<group>/<stem>.npy') so two groups with same-named stems
-        never collide.
         """
         group, mat_path, label = self._records[idx]
         stem = Path(mat_path).stem   # filename without directory or extension
@@ -364,7 +327,7 @@ class GeorgiaECGDataset(Dataset):
             if cache_path:
                 # Fail loudly if the cache directory is unwritable. A silent
                 # fallback to random tensors here once masked a permission error
-                # and quietly trained the model on noise -- never again.
+                # and quietly trained the model on noise.
                 # Write to a unique temp file, then atomically rename, so a
                 # concurrent DataLoader worker can never read a partial .npy.
                 os.makedirs(os.path.dirname(cache_path), exist_ok=True)
@@ -425,10 +388,6 @@ class GeorgiaECGDataset(Dataset):
         signals = signals.astype(np.float32)
 
         # Downsample 500 Hz -> 100 Hz (factor 5)
-        # resample_poly avoids the phase distortion of plain decimation and
-        # applies the proper anti-aliasing polyphase filter. up=1, down=5 gives
-        # the exact 5x decimation along axis=0 (time), leaving the 12 lead
-        # columns intact.
         signals_100hz = resample_poly(
             signals, up=1, down=5, axis=0,
         ).astype(np.float32)

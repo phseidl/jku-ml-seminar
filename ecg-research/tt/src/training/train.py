@@ -1,8 +1,6 @@
 """
 src/training/train.py
 =====================
-The training orchestrator -- the one place the whole experiment is wired
-together.
 """
 
 import os

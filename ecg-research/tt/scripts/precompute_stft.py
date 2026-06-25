@@ -3,62 +3,11 @@ scripts/precompute_stft.py
 ==========================
 One-time builder for the on-disk STFT feature cache used by PTB-XL training.
 
-What this file does
--------------------
-An ECG is just voltage over time, but the model is trained on its frequency
-content, not the raw trace. For every PTB-XL recording I load the raw 12-lead
-waveform, take the per-lead short-time Fourier transform (STFT) magnitude --
-how much power sits in each frequency band as the beat unfolds -- and write
-that spectrogram as a float32 '.npy' file named '{ecg_id}.npy' in 'cache_dir'.
-There are ~21800 records and the STFT is plain CPU arithmetic, so I spread
-the work across cores with a 'multiprocessing.Pool'.
-
-Why the cache exists
---------------------
-The STFT is fully determined by (signal, fs, nfft, window params), so the same
-spectrogram comes out every time -- recomputing it each epoch and each sweep
-run is wasted work. 'PTBXLDataset' (src/data/dataset.py) reads
-'{cache_dir}/{ecg_id}.npy' straight off disk when it exists and only computes
-the STFT on the fly when the cache is missing. Loading a precomputed array is
-roughly an order of magnitude faster than recomputing it, which matters most
-in the long sweeps where the same records are read thousands of times.
-
-Role in the pipeline / what reads this cache
----------------------------------------------
-- Consumer: 'PTBXLDataset.__getitem__' in src/data/dataset.py. It keys the
-  cache by 'ecg_id' exactly as I do here ('{ecg_id}.npy'), so the two naming
-  schemes MUST stay in lockstep. The dataset can also build the cache lazily,
-  one record at a time on first access; this script just front-loads that work
-  in parallel so the first training run is not stuck waiting on it.
-- Driver: scripts/sweep_nfft_ablation.py (the Table 2 N_FFT ablation of the
-  original study) needs a separate cache per N_FFT value and tells the user to
-  "pre-build first with scripts/precompute_stft.py --nfft {n}". Each N_FFT
-  yields a different '(12, F, T)' shape (F = nfft//2 + 1), so each N_FFT needs
-  its own '--cache_dir'; mixing shapes in one directory would silently corrupt
-  the run.
-
-How it is run (CLI / harness)
------------------------------
-A standalone CLI script, not imported anywhere. Run it directly from the
-'practical_work/' working directory:
-
     python scripts/precompute_stft.py
     python scripts/precompute_stft.py \\
         --data_dir /path/to/ptb-xl-1.0.3 \\
         --cache_dir /path/to/ptb-xl-stft-cache \\
         --num_workers 64
-
-Re-runs are cheap and safe: any record whose '.npy' already exists is skipped,
-so an interrupted build can just be re-launched to finish the rest -- it is
-idempotent and resumable.
-
-Note on the sibling implementation
------------------------------------
-src/data/dataset.py also defines a 'compute_stft' helper, but that one takes a
-SINGLE lead and is stacked by the caller. The 'compute_stft' in THIS file loops
-over all 12 leads internally and returns the stacked '(12, F, T)' array. The
-numerical recipe (window, overlap, nfft, magnitude, float32) is identical, so
-the two paths produce byte-compatible caches; only the loop placement differs.
 """
 
 import os
@@ -136,10 +85,6 @@ def compute_stft(signal: np.ndarray, fs: int = 100,
 def process_one(args, data_dir: str, cache_dir: str, fs: int, nfft: int):
     """Build and persist the STFT cache for a single recording (worker body).
 
-    This is what each pool worker runs. It is self-contained and returns a
-    result tuple instead of raising, so one unreadable record cannot bring
-    down the whole pool; the parent collects the failures and reports them.
-
     Args:
         args: a (ecg_id, filename) pair. Packed as one positional argument
             because 'imap_unordered' passes a single item per call; the other
@@ -158,11 +103,6 @@ def process_one(args, data_dir: str, cache_dir: str, fs: int, nfft: int):
     ecg_id, filename = args                                   # unpack the (id, path) pair
     cache_path = os.path.join(cache_dir, f"{ecg_id}.npy")     # flat per-ecg_id cache file
 
-    # Skip if already cached. This is what makes the script resumable: an
-    # interrupted run can be re-launched and only the missing records get
-    # recomputed. NOTE: I do not check the existing file's shape here, so a
-    # cache built under a DIFFERENT nfft would be wrongly trusted as valid;
-    # the contract is "one cache_dir per nfft" (see module docstring).
     if os.path.exists(cache_path):
         return ecg_id, True, None
 
@@ -177,9 +117,7 @@ def process_one(args, data_dir: str, cache_dir: str, fs: int, nfft: int):
         stft = compute_stft(signals, fs, nfft)               # (12, F, 59)
         # NOTE: writes straight to cache_path (no temp-file + atomic rename).
         # Each ecg_id is owned by exactly one worker, so nothing else writes
-        # the same file here. The dataset's lazy-build path DOES use the
-        # tmp+os.replace dance, because there many DataLoader workers can race
-        # on the same record.
+        # the same file here.
         # NOTE: adopt the same tmp-then-rename write here too, so a SIGKILL
         # mid-write cannot leave a truncated .npy that the skip check above
         # would later trust.
@@ -213,9 +151,7 @@ def main():
     parser.add_argument("--nfft", type=int, default=480,
                         help="FFT length; F = nfft//2 + 1 freq bins per "
                              "lead. Use a separate cache_dir for each nfft.")
-    # Cap at 192 workers OR the machine's core count, whichever is smaller, so
-    # this does not oversubscribe a smaller box. The dyopto server has many
-    # cores, so in practice the 192 cap is what binds.
+
     parser.add_argument("--num_workers", type=int, default=min(192, cpu_count()))
     args = parser.parse_args()
 
@@ -263,11 +199,7 @@ def main():
     with Pool(processes=args.num_workers) as pool:
         # imap_unordered: results come back as soon as any worker finishes,
         # which keeps the tqdm bar moving smoothly and avoids holding all
-        # results in memory. Order does not matter since each worker writes
-        # its own file and I only collect failures.
-        # chunksize=50: hand 50 records to a worker at a time to amortize the
-        # per-task IPC overhead; the STFT is short enough that a chunksize of 1
-        # would make scheduling, not computation, the bottleneck.
+        # results in memory.
         for ecg_id, success, error in tqdm(
             pool.imap_unordered(worker_fn, pairs, chunksize=50),
             total=len(pairs),
@@ -284,24 +216,14 @@ def main():
         for ecg_id, error in failed[:20]:
             print(f"  {ecg_id}: {error}")
 
-    # Verify the shape of the first cached file -- a cheap end-to-end sanity
-    # check. If the cache was built under the wrong nfft, the F dimension
-    # printed here will not match the expected (12, F, 59), surfacing the
-    # mistake right away.
+    # Verify the shape of the first cached file.
     first_ecg_id = pairs[0][0]
     sample = np.load(os.path.join(args.cache_dir, f"{first_ecg_id}.npy"))
     expected_F = args.nfft // 2 + 1                # same F = nfft//2 + 1 contract
     print(f"\nSample shape: {sample.shape} (expected: (12, {expected_F}, 59))")
     print(f"Sample dtype: {sample.dtype}")
-    # Total on-disk footprint of the cache, in GB (1e9 bytes). NOTE: this sums
-    # every file in cache_dir, so it would also count any stray non-.npy files;
-    # in practice the directory holds only the per-record arrays.
     print(f"Cache size: {sum(os.path.getsize(os.path.join(args.cache_dir, f)) for f in os.listdir(args.cache_dir)) / 1e9:.2f} GB")
 
 
 if __name__ == "__main__":
-    # Standard script guard. The 'multiprocessing.Pool' started inside main()
-    # relies on this on platforms that spawn child processes (so the children
-    # re-import the module without re-running main()); on Linux 'fork' it is
-    # not strictly required but is kept for portability.
     main()
