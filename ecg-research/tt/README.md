@@ -1,6 +1,6 @@
 # xLSTM-ECG — Reproduction on PTB-XL and the Georgia 12-Lead ECG Challenge
 
-**Johannes Kepler University Linz** — ML Seminar & Practical Work 2026S \
+**Johannes Kepler University Linz** — Practical Work in AI 2026S \
 **Author:** Thomas Tschoellitsch \
 **Supervisor:** Dr. Philipp Seidl, MSc
 
