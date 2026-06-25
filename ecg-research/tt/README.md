@@ -113,7 +113,7 @@ Tested on Linux (Ubuntu 24.04, kernel 6.17), Python 3.12, PyTorch 2.11.0 + CUDA 
 ## Reproducing the results (in order)
 
 ```bash
-# 0. install + verify (above), then activate the venv. All commands run from submission/.
+# 0. install + verify (above), then activate the venv. All commands run from ./.
 
 # 1. point the code at your data
 #    edit config/config.yaml -> data.root   (or pass EXTRA="data.root=/your/path" below)
@@ -160,7 +160,7 @@ The suite pins the contracts the reported numbers depend on: PTB-XL label aggreg
 ## Repository layout
 
 ```
-submission/
+./
 ├── config/config.yaml          # single source of truth; every key documented inline
 ├── src/
 │   ├── data/dataset.py         # PTB-XL: label aggregation (lik_eq_100), per-lead STFT, (12,241,59) tensors
