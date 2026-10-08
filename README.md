@@ -54,7 +54,7 @@ To get started with this project, follow these steps:
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/phseidl/jku-ml-seminar23
+   git clone https://github.com/phseidl/jku-ml-seminar
 
 2. Select a paper
 Papers will be in a folder within the two groups in ````.*/data/papers/``, you can also propose your own paper for the seminar.
