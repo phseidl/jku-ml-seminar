@@ -1,9 +1,9 @@
 # Seminar Project and Master's Thesis Repository
 This is the official repository for the seminar project and master's thesis project supervised by phseidl, which encompasses two distinct groups: drug-discovery and EEG (Electroencephalography) research. This mono-repository is designed to facilitate coordination, teach version control, and collaboration between you all.
 
-Meetings: on demand for now - send me a mail ~every Monday 15:30-16:00 SP3 S318 or via [zoom](https://jku.zoom.us/j/98032906314?pwd=ZFRQVDA5UVU1T0d6U0R2eGljQjF3dz09) (except holiday, or stated in the issues page)~
+Meetings: every Monday 15:00-16:00  via zoom or in person SP3 S318 (except holidays, or as stated on the issues page)
 
-Voluntary ML4Drug-Discovery-Journal-Club of our Institute: (almost) every Tuesday 13-14:00 [zoom](https://jku.zoom.us/j/99088074385?pwd=bEdQN1dnaVNTUDFsdkRhSU9SZmZVQT09)
+Voluntary ML4Drug-Discovery-Journal-Club of our Institute: (almost) every Monday 13-14:00 [zoom](https://jku.zoom.us/j/62872815496?pwd=LE7BEFWis8E9IEWSfbwa1W0LHH3TnS.1#success)
 
 Most important thing:
 your results should be reproducible and therefore well documented!
