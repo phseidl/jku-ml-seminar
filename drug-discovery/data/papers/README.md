@@ -3,6 +3,7 @@
 
 - Philipp Seidl [Time Series as Images: Vision Transformer for Irregularly Sampled Time Series](https://openreview.net/forum?id=Nv0tzncECS)
 - Stefan Hangler [COATI: multi-modal contrastive pre-training for representing and traversing chemical space](https://chemrxiv.org/engage/chemrxiv/article-details/64e8137fdd1a73847f73f7aa)
+- Radosław Winiecki [Enhancing Activity Prediction Models in Drug Discovery with the Ability to Understand Human Language](https://arxiv.org/abs/2303.03363)
 
 ## Papers
 
