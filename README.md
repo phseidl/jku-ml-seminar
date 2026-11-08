@@ -42,7 +42,7 @@ Within the projects a suggestion would be:
 - `*/scripts/`: for scripts to run
 
 -- 
-please all try to mentain a README for both projects
+please all try to maintain a README for both projects
 
 each individual project should have a `setup.py` and a `env.yml`, `README.md`, `PROGRESS.md`, I will provide a base, which you can modify.
 
